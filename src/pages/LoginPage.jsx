@@ -102,8 +102,8 @@ const LoginPage = () => {
 
           {/* Header */}
           <div className="text-center mb-10">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-red-50 text-[#991B1B] mb-5 shadow-sm ring-1 ring-red-100">
-              <i className="fas fa-clipboard-check text-2xl"></i>
+            <div className="flex items-center justify-center mb-5">
+              <img src="/sarthak_logo.jpg" alt="Sarthak Logo" className="h-16 w-auto object-contain" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Welcome Back</h1>
             <p className="text-sm text-gray-500 mt-2.5 font-medium">Sign in to Sarthak TMT Checklist Portal</p>
