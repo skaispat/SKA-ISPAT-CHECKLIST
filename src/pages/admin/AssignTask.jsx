@@ -377,9 +377,20 @@ export default function AssignTask() {
         }
     };
 
+    // Check if Assigned By and Assigned To are the same person
+    const selectedDoer = doerOptions.find(u => u.full_name === formData.doer);
+    const isSameUser = formData.givenBy && formData.doer && selectedDoer && selectedDoer.username === formData.givenBy;
+
     // Generate tasks based on frequency
     const generateTasks = async (isAuto = false) => {
         setGenerationError(null); // Clear previous errors
+
+        if (isSameUser) {
+            const msg = "Assigned By and Assigned To cannot be the same person.";
+            if (!isAuto) alert(msg);
+            else setGenerationError(msg);
+            return;
+        }
 
         // Strict check for required fields
         if (!date || !formData.doer || !formData.title || !formData.frequency || !formData.description || !formData.department || !formData.givenBy) {
@@ -526,10 +537,8 @@ export default function AssignTask() {
                 enableReminders: formData.enableReminders,
                 requireAttachment: formData.requireAttachment,
             });
-        } else if (formData.frequency === "daily" || formData.frequency === "yearly") {
+        } else if (formData.frequency === "daily") {
             // Generate tasks for next 365 working days (or less if calendar ends)
-            // Note: User says "Daily - Generate 365 task", "Yearly - Generate 365 task".
-            // We assume this means generating a daily checklist for a year.
             const limit = 365;
             for (let i = startIndex; i < futureDates.length && i < startIndex + limit; i++) {
                 const taskDateStr = futureDates[i];
@@ -546,6 +555,31 @@ export default function AssignTask() {
                     requireAttachment: formData.requireAttachment,
                 });
             }
+        } else if (formData.frequency === "yearly") {
+            // Generate 1 task on the selected date and month for the next year
+            const selectedDateObj = new Date(date);
+            const targetDate = addYears(selectedDateObj, 1);
+            let targetDateStr = formatDateToDDMMYYYY(targetDate);
+
+            if (workingDays.length > 0) {
+                const closestIndex = findClosestWorkingDayIndex(workingDays, targetDateStr);
+                if (closestIndex !== -1) {
+                    targetDateStr = workingDays[closestIndex];
+                }
+            }
+
+            tasks.push({
+                title: formData.title,
+                description: formData.description,
+                department: formData.department,
+                givenBy: formData.givenBy,
+                doer: formData.doer,
+                dueDate: targetDateStr,
+                status: "pending",
+                frequency: formData.frequency,
+                enableReminders: formData.enableReminders,
+                requireAttachment: formData.requireAttachment,
+            });
         } else if (formData.frequency === "monthly") {
             // Generate 1 task for each of the next 12 months (Total 12 tasks)
             const selectedDateObj = new Date(date);
@@ -864,6 +898,11 @@ export default function AssignTask() {
                                             <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
                                         </div>
                                     </div>
+                                    {isSameUser && (
+                                        <p className="text-[10px] text-red-500 font-medium mt-1">
+                                            Cannot assign to same person
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Start Date / Select Month */}
