@@ -26,6 +26,28 @@ export default function Sidebar({
         }
     }, [isDataPage, isDataSubmenuOpen])
 
+    // Get user department for filtering
+    const [userDept, setUserDept] = useState("")
+
+    useEffect(() => {
+        const storedDept = sessionStorage.getItem('department')
+        if (storedDept) {
+            setUserDept(storedDept)
+        }
+    }, [])
+
+    const visibleDepartments = userRole === 'admin'
+        ? departments
+        : departments.filter(d => {
+            if (!userDept) return false
+            const normalizedUserDept = userDept.toLowerCase().trim()
+            const normalizedCatName = d.name.toLowerCase().trim()
+
+            // Flexible matching for cases like "Accounts" matching "Account"
+            return normalizedUserDept.includes(normalizedCatName) ||
+                normalizedCatName.includes(normalizedUserDept)
+        })
+
     const DesktopSidebar = () => {
         const dashboardPath = userRole === 'admin' ? '/dashboard/admin' : '/dashboard/user'
 
@@ -60,7 +82,7 @@ export default function Sidebar({
                                         </button>
                                         {isDataSubmenuOpen && (
                                             <ul className="mt-1 ml-4 space-y-1 pl-2 border-l border-border">
-                                                {departments.map((category) => (
+                                                {visibleDepartments.map((category) => (
                                                     <li key={category.id}>
                                                         <Link
                                                             to={category.link || `/dashboard/data/${category.id}`}
@@ -165,7 +187,7 @@ export default function Sidebar({
                                                 </button>
                                                 {isDataSubmenuOpen && (
                                                     <ul className="mt-1 ml-4 space-y-1 border-l border-border pl-2">
-                                                        {departments.map((category) => (
+                                                        {visibleDepartments.map((category) => (
                                                             <li key={category.id}>
                                                                 <Link
                                                                     to={category.link || `/dashboard/data/${category.id}`}

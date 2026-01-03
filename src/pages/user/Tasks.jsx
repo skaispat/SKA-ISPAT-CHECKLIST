@@ -67,14 +67,35 @@ export default function UserTasks() {
 
       // 2. Get Tasks for this user
       // Note: 'name' column in master_tasks stores the full name of the doer
-      const { data: tasksData, error: tasksError } = await supabase
-        .from("master_tasks")
-        .select("*")
-        .eq("name", userData.full_name) // Filtering by full name
-        .order("task_start_date", { ascending: true })
+      let allTasks = []
+      let fetchPage = 0
+      const pageSize = 1000
+      let hasMore = true
 
-      if (tasksError) throw tasksError
-      setTasks(tasksData || [])
+      while (hasMore) {
+        const { data: tasksData, error: tasksError } = await supabase
+          .from("master_tasks")
+          .select("*")
+          .eq("name", userData.full_name) // Filtering by full name
+          .order("task_start_date", { ascending: true })
+          .range(fetchPage * pageSize, (fetchPage + 1) * pageSize - 1)
+
+        if (tasksError) throw tasksError
+
+        if (tasksData && tasksData.length > 0) {
+          allTasks = [...allTasks, ...tasksData]
+
+          if (tasksData.length < pageSize) {
+            hasMore = false
+          } else {
+            fetchPage++
+          }
+        } else {
+          hasMore = false
+        }
+      }
+
+      setTasks(allTasks)
 
     } catch (error) {
       console.error("Error fetching data:", error)
@@ -570,7 +591,7 @@ export default function UserTasks() {
 
             {/* Pagination Controls */}
             {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-2 pt-4">
+              <div className="flex justify-center items-center gap-2 pt-4 flex-wrap">
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
@@ -579,20 +600,49 @@ export default function UserTasks() {
                   Previous
                 </button>
 
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <button
-                      key={page}
-                      onClick={() => setCurrentPage(page)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-md text-sm border 
-                        ${currentPage === page
-                          ? 'bg-[#991B1B] text-white border-[#991B1B]'
-                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                        }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-1 flex-wrap justify-center">
+                  {(() => {
+                    const pages = [];
+                    // Logic to show limited pages
+                    if (totalPages <= 7) {
+                      for (let i = 1; i <= totalPages; i++) pages.push(i);
+                    } else {
+                      if (currentPage <= 4) {
+                        for (let i = 1; i <= 5; i++) pages.push(i);
+                        pages.push('...');
+                        pages.push(totalPages);
+                      } else if (currentPage >= totalPages - 3) {
+                        pages.push(1);
+                        pages.push('...');
+                        for (let i = totalPages - 4; i <= totalPages; i++) pages.push(i);
+                      } else {
+                        pages.push(1);
+                        pages.push('...');
+                        pages.push(currentPage - 1);
+                        pages.push(currentPage);
+                        pages.push(currentPage + 1);
+                        pages.push('...');
+                        pages.push(totalPages);
+                      }
+                    }
+
+                    return pages.map((page, index) => (
+                      <button
+                        key={index}
+                        onClick={() => typeof page === 'number' && setCurrentPage(page)}
+                        disabled={typeof page !== 'number'}
+                        className={`min-w-[2rem] h-8 px-2 flex items-center justify-center rounded-md text-sm border 
+                            ${page === currentPage
+                            ? 'bg-[#991B1B] text-white border-[#991B1B]'
+                            : typeof page === 'number'
+                              ? 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                              : 'bg-transparent text-gray-400 border-transparent cursor-default'
+                          }`}
+                      >
+                        {page}
+                      </button>
+                    ));
+                  })()}
                 </div>
 
                 <button

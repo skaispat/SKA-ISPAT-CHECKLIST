@@ -48,13 +48,30 @@ const UserDashboard = () => {
             setUser(userData)
 
             // 2. Get Tasks for this user
-            const { data: tasksData, error: tasksError } = await supabase
-                .from("master_tasks")
-                .select("*")
-                .eq("name", userData.full_name)
-                .order("task_start_date", { ascending: true })
+            // 2. Get Tasks for this user (with chunking for large datasets)
+            let tasksData: any[] = [];
+            let from = 0;
+            const chunkSize = 1000;
+            let fetching = true;
 
-            if (tasksError) throw tasksError
+            while (fetching) {
+                const { data, error } = await supabase
+                    .from("master_tasks")
+                    .select("*")
+                    .eq("name", userData.full_name)
+                    .order("task_start_date", { ascending: true })
+                    .range(from, from + chunkSize - 1)
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    tasksData = [...tasksData, ...data];
+                    from += chunkSize;
+                    if (data.length < chunkSize) fetching = false;
+                } else {
+                    fetching = false;
+                }
+            }
 
             // 3. Calculate Stats & Process Tasks
             const today = new Date()

@@ -589,13 +589,13 @@ export default function SecurityData() {
                                         </th>
                                     )}
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Task ID</th>
+                                    <th className="px-4 py-3 whitespace-nowrap font-medium">Start Date</th>
                                     {activeTab === 'history' && <th className="px-4 py-3 whitespace-nowrap min-w-[150px] font-medium">Status</th>}
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Department</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Given By</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Name</th>
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[450px] font-medium">Task Title</th>
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[500px] font-medium">Task Description</th>
-                                    <th className="px-4 py-3 whitespace-nowrap font-medium">Start Date</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Freq</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium text-center">Reminders</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium text-center">Attachment</th>
@@ -634,6 +634,7 @@ export default function SecurityData() {
                                                 </td>
                                             )}
                                             <td className="px-4 py-3 font-mono text-xs text-muted-foreground/80">#{String(task.task_id).length > 8 ? String(task.task_id).substring(0, 8) + '...' : task.task_id}</td>
+                                            <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatDate(task.task_start_date)}</td>
                                             {activeTab === 'history' && (
                                                 <td className="px-4 py-3">
                                                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${task.status === 'Yes' ? 'bg-green-50 text-green-700' :
@@ -659,7 +660,6 @@ export default function SecurityData() {
                                                     {task.task_description}
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{formatDate(task.task_start_date)}</td>
                                             <td className="px-4 py-3 text-muted-foreground">{task.freq}</td>
                                             <td className="px-4 py-3 text-muted-foreground text-center">{renderCell(task.enable_reminders)}</td>
                                             <td className="px-4 py-3 text-muted-foreground text-center">{renderCell(task.require_attachment)}</td>

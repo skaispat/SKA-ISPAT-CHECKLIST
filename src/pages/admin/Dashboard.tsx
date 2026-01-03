@@ -472,30 +472,32 @@ export default function AdminDashboard() {
     const fetchDepartments = async () => {
         try {
             setIsFetchingMaster(true)
-            const { data, error } = await supabase
-                .from('departments')
-                .select('dept_name')
-                .order('dept_name')
 
-            if (error) throw error
+            // Run requests in parallel
+            const [deptResult, staffCountResult] = await Promise.all([
+                supabase
+                    .from('departments')
+                    .select('dept_name')
+                    .order('dept_name'),
+                supabase
+                    .from('users')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'active')
+            ]);
 
-            const options = ["Select Department", ...data.map(d => d.dept_name)]
+            if (deptResult.error) throw deptResult.error
+
+            const options = ["Select Department", ...deptResult.data.map(d => d.dept_name)]
             setMasterSheetOptions(options)
 
             if (!selectedMasterOption) {
                 setSelectedMasterOption(options[0])
             }
 
-            // Fetch active staff count (total users)
-            const { count, error: countError } = await supabase
-                .from('users')
-                .select('*', { count: 'exact', head: true })
-                .eq('status', 'active')
-
-            if (!countError) {
+            if (!staffCountResult.error) {
                 setDepartmentData(prev => ({
                     ...prev,
-                    activeStaff: count || 0
+                    activeStaff: staffCountResult.count || 0
                 }))
             }
 
@@ -518,27 +520,48 @@ export default function AdminDashboard() {
             const username = sessionStorage.getItem('username');
             const userRole = sessionStorage.getItem('role');
 
-            // Fetch tasks for the department
-            let query = supabase
-                .from('master_tasks')
-                .select('*')
-                .eq('department', department)
+            const BATCH_SIZE = 1000;
 
-            // If not admin, maybe filter? But this is AdminDashboard, so presumably they can see all for the department they selected?
-            // The original code had: const isUserMatch = userRole === 'admin' || assignedTo === username
-            // If the user selects a department, they should probably see everything if they are admin.
-            // If they are not admin, they might be restricted. Assuming admin access for this dashboard or full view.
+            // Helper to fetch all data in parallel chunks
+            const fetchAllData = async (
+                table: string,
+                queryCustomizer: (query: any) => any
+            ) => {
+                // Initial fetch to get the count and the first page
+                let query = supabase.from(table).select('*', { count: 'exact' });
+                query = queryCustomizer(query);
 
-            const { data: tasksData, error: tasksError } = await query;
-            if (tasksError) throw tasksError;
+                const { data, count, error } = await query.range(0, BATCH_SIZE - 1);
 
-            // Fetch users for the department to map staff
-            const { data: usersData, error: usersError } = await supabase
-                .from('users')
-                .select('*')
-                .eq('department', department)
+                if (error) throw error;
 
-            if (usersError) throw usersError;
+                let allData = data || [];
+                const totalCount = count || 0;
+
+                if (totalCount > BATCH_SIZE) {
+                    const promises = [];
+                    for (let from = BATCH_SIZE; from < totalCount; from += BATCH_SIZE) {
+                        const to = from + BATCH_SIZE - 1;
+                        let pageQuery = supabase.from(table).select('*');
+                        pageQuery = queryCustomizer(pageQuery);
+                        promises.push(pageQuery.range(from, to));
+                    }
+
+                    const responses = await Promise.all(promises);
+                    responses.forEach(res => {
+                        if (res.error) throw res.error;
+                        if (res.data) allData = [...allData, ...res.data];
+                    });
+                }
+
+                return allData;
+            };
+
+            // Run tasks and users fetch in parallel
+            const [tasksData, usersData] = await Promise.all([
+                fetchAllData('master_tasks', (q) => q.eq('department', department)),
+                fetchAllData('users', (q) => q.eq('department', department))
+            ]);
 
             let totalTasks = 0;
             let completedTasks = 0;
@@ -758,8 +781,8 @@ export default function AdminDashboard() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        const threeDaysFromNow = new Date(today);
+        threeDaysFromNow.setDate(today.getDate() + 3);
 
         const viewFilteredTasks = filteredTasks.filter((task) => {
             if (!task.status || task.status === "completed") return false;
@@ -781,11 +804,8 @@ export default function AdminDashboard() {
 
             switch (view) {
                 case "recent":
-                    return (
-                        dueDate.getDate() === today.getDate() &&
-                        dueDate.getMonth() === today.getMonth() &&
-                        dueDate.getFullYear() === today.getFullYear()
-                    );
+                    // Show today and upcoming 3 days tasks
+                    return dueDate >= today && dueDate <= threeDaysFromNow;
                 case "upcoming":
                     return dueDate > today;
                 case "overdue":
@@ -794,6 +814,19 @@ export default function AdminDashboard() {
                     return true;
             }
         });
+
+        // Sort upcoming tasks in ascending order by Date
+        if (view === "upcoming") {
+            viewFilteredTasks.sort((a, b) => {
+                const dateA = parseDateFromDDMMYYYY(a.dueDate);
+                const dateB = parseDateFromDDMMYYYY(b.dueDate);
+                if (!dateA && !dateB) return 0;
+                if (!dateA) return 1;
+                if (!dateB) return -1;
+                return dateA.getTime() - dateB.getTime();
+            });
+        }
+
         return viewFilteredTasks;
     };
 
