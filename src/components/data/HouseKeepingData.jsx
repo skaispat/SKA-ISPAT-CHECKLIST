@@ -48,7 +48,7 @@ export default function HouseKeepingData() {
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1)
-    const itemsPerPage = 10
+    const itemsPerPage = 500
 
     useEffect(() => {
         setSelectedRows(new Set())
@@ -114,12 +114,33 @@ export default function HouseKeepingData() {
                 query = query.eq('name', userData.full_name)
             }
 
-            // 4. Execute Query
-            const { data, error } = await query.order('timestamp', { ascending: false })
+            // 4. Execute Query (Fetch all data)
+            let allData = []
+            let page = 0
+            const pageSize = 1000
+            let hasMore = true
 
-            if (error) throw error
+            // Apply ordering
+            const orderedQuery = query.order('timestamp', { ascending: false })
+
+            while (hasMore) {
+                const { data, error } = await orderedQuery.range(page * pageSize, (page + 1) * pageSize - 1)
+
+                if (error) throw error
+
+                if (data && data.length > 0) {
+                    allData = [...allData, ...data]
+                    if (data.length < pageSize) {
+                        hasMore = false
+                    }
+                } else {
+                    hasMore = false
+                }
+                page++
+            }
+
             // Store original status as db_status for filtering
-            setTasks((data || []).map(t => ({ ...t, db_status: t.status })))
+            setTasks(allData.map(t => ({ ...t, db_status: t.status })))
         } catch (error) {
             console.error("Error fetching tasks:", error)
         } finally {
@@ -755,8 +776,8 @@ export default function HouseKeepingData() {
                                                 <span className="font-mono text-xs text-muted-foreground/80">#{String(task.task_id).substring(0, 8)}</span>
                                                 {activeTab === 'history' && (
                                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${task.status === 'Yes' ? 'bg-green-50 text-green-700' :
-                                                            task.status === 'pending_approval' ? 'bg-yellow-50 text-yellow-700' :
-                                                                'bg-red-50 text-red-700'
+                                                        task.status === 'pending_approval' ? 'bg-yellow-50 text-yellow-700' :
+                                                            'bg-red-50 text-red-700'
                                                         }`}>
                                                         {task.status === 'Yes' ? 'Completed' : task.status === 'pending_approval' ? 'Pending' : 'Incomplete'}
                                                     </span>
