@@ -129,6 +129,13 @@ const formatDateToDDMMYYYY = (date) => {
     const year = d.getFullYear()
     return `${day}/${month}/${year}`
 }
+const WEEKDAY_MAP = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+const getWeekdayKeyFromDDMMYYYY = (dateStr) => {
+    const [d, m, y] = dateStr.split("/").map(Number);
+    const date = new Date(y, m - 1, d);
+    return WEEKDAY_MAP[date.getDay()];
+};
 
 export default function AssignTask() {
     const navigate = useNavigate()
@@ -140,6 +147,9 @@ export default function AssignTask() {
     const [workingDays, setWorkingDays] = useState([]) // Store working days
     const [generationError, setGenerationError] = useState(null)
     const [showToast, setShowToast] = useState(null)
+    // Example: Sunday holiday
+    const [skipDays, setSkipDays] = useState(["sun"]);
+
     const calendarRef = useRef(null)
 
     // Check for admin role
@@ -497,6 +507,15 @@ export default function AssignTask() {
             }
         }
 
+        // 🔥 Skip selected weekdays ONLY for DAILY frequency
+        if (formData.frequency === "daily" && skipDays.length > 0) {
+            futureDates = futureDates.filter(dateStr => {
+                const weekday = getWeekdayKeyFromDDMMYYYY(dateStr);
+                return !skipDays.includes(weekday);
+            });
+        }
+
+
         // If no future working days are available from the selected date (mainly for workingDays logic)
         if (futureDates.length === 0) {
             const msg = "No valid dates found starting from your selected date.";
@@ -758,6 +777,7 @@ export default function AssignTask() {
                     freq: task.frequency,
                     enable_reminders: task.enableReminders,
                     require_attachment: task.requireAttachment,
+                    skip_days: task.frequency === "daily" ? skipDays : [],
                     status: 'pending' // Default status
                 };
             });
@@ -997,6 +1017,41 @@ export default function AssignTask() {
                                             <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Skip Days */}
+                            <div className="space-y-1">
+                                <label className="block text-xs font-medium text-gray-700">
+                                    Skip Days
+                                </label>
+
+                                <div className="flex flex-wrap md:gap-3 gap-2">
+                                    {WEEKDAY_MAP.map(day => {
+                                        const isActive = skipDays.includes(day);
+
+                                        return (
+                                            <button
+                                                key={day}
+                                                type="button"
+                                                onClick={() =>
+                                                    setSkipDays(prev =>
+                                                        isActive
+                                                            ? prev.filter(d => d !== day)
+                                                            : [...prev, day]
+                                                    )
+                                                }
+                                                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all
+                        ${isActive
+                                                        ? "bg-[#991B1B] text-white border-[#991B1B]"
+                                                        : "bg-white text-gray-700 border-gray-300 hover:border-[#991B1B]"
+                                                    }
+                    `}
+                                            >
+                                                {day.toUpperCase()}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 

@@ -253,6 +253,7 @@ export default function AdminApproval() {
                                         <th className="px-6 py-4">Task Details</th>
                                         <th className="px-6 py-4">User</th>
                                         <th className="px-6 py-4">Department</th>
+                                        <th className="px-6 py-4">Start Date</th>
                                         <th className="px-6 py-4">Submission Time</th>
                                         <th className="px-6 py-4">Proof</th>
                                         <th className="px-6 py-4 text-right">
@@ -281,6 +282,12 @@ export default function AdminApproval() {
                                             </td>
                                             <td className="px-6 py-4 align-top whitespace-nowrap text-gray-600">
                                                 {task.department}
+                                            </td>
+                                            <td className="px-6 py-4 align-top whitespace-nowrap text-gray-600">
+                                                <div className="flex items-center gap-1.5">
+                                                    <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                                                    {formatDate(task.task_start_date)}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 align-top whitespace-nowrap text-gray-600">
                                                 <div className="flex items-center gap-1.5">

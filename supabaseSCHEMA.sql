@@ -28,6 +28,7 @@ CREATE TABLE public.master_tasks (
   remarks text,
   uploaded_image text,
   whatsapp_no text,
+  skip_days TEXT[],
   CONSTRAINT master_tasks_pkey PRIMARY KEY (task_id),
   CONSTRAINT fk_given_by_username FOREIGN KEY (given_by_username) REFERENCES public.users(username),
   CONSTRAINT fk_master_tasks_department FOREIGN KEY (department) REFERENCES public.departments(dept_name)
