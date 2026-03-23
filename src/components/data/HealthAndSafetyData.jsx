@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { supabase } from "../../supabase"
 import {
     Loader2,
@@ -48,12 +48,21 @@ export default function HealthAndSafetyData() {
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1)
-    const itemsPerPage = 500
+    const itemsPerPage = 250
+    const [visibleItemsInBuffer, setVisibleItemsInBuffer] = useState(25)
+    const scrollContainerRef = useRef(null)
 
     useEffect(() => {
         setSelectedRows(new Set())
         setCurrentPage(1)
     }, [activeTab, searchTerm, historyFilterName, historyStartDate, historyEndDate, upcomingFilterName, upcomingStartDate, upcomingEndDate])
+
+    useEffect(() => {
+        setVisibleItemsInBuffer(25)
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = 0
+        }
+    }, [currentPage])
 
     useEffect(() => {
         fetchTasks()
@@ -352,9 +361,20 @@ export default function HealthAndSafetyData() {
     })
 
     // Pagination logic
+    const handleScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target
+        if (scrollTop + clientHeight >= scrollHeight - 50) {
+            setVisibleItemsInBuffer(prev => {
+                const newVisible = prev + 50
+                return Math.min(newVisible, filteredTasks.length)
+            })
+        }
+    }
+
     const indexOfLastItem = currentPage * itemsPerPage
     const indexOfFirstItem = indexOfLastItem - itemsPerPage
-    const currentItems = filteredTasks.slice(indexOfFirstItem, indexOfLastItem)
+    const paginatedItems = filteredTasks.slice(indexOfFirstItem, indexOfLastItem)
+    const currentItems = paginatedItems.slice(0, visibleItemsInBuffer)
     const totalPages = Math.ceil(filteredTasks.length / itemsPerPage)
 
     const toggleSelectAll = () => {
@@ -443,32 +463,33 @@ export default function HealthAndSafetyData() {
                     </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex items-center gap-1 p-1 bg-muted/30 rounded-lg w-fit mb-6">
-                    <button
-                        onClick={() => setActiveTab('upcoming')}
-                        className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'upcoming'
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                            }`}
-                    >
-                        Upcoming Tasks
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('history')}
-                        className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'history'
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                            }`}
-                    >
-                        History
-                    </button>
-                </div>
+                {/* Tabs and Filters */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pt-2">
+                    <div className="flex items-center gap-1 p-1 bg-muted/30 rounded-lg w-fit shrink-0">
+                        <button
+                            onClick={() => setActiveTab('upcoming')}
+                            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'upcoming'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                }`}
+                        >
+                            Upcoming Tasks
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'history'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                }`}
+                        >
+                            History
+                        </button>
+                    </div>
 
-                {/* Upcoming Filters */}
-                {activeTab === 'upcoming' && (
-                    <div className="flex flex-wrap items-end gap-3 mb-6 p-1 animate-in fade-in slide-in-from-top-1">
-                        {isAdmin && (
+                    {/* Upcoming Filters */}
+                    {activeTab === 'upcoming' && (
+                        <div className="flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2">
+                            {isAdmin && (
                             <div className="flex flex-col gap-1 w-full sm:w-auto">
                                 <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
                                 <select
@@ -511,7 +532,7 @@ export default function HealthAndSafetyData() {
                                 }}
                                 className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                             >
-                                Clear Filters
+                                Clear
                             </button>
                         )}
                     </div>
@@ -519,7 +540,7 @@ export default function HealthAndSafetyData() {
 
                 {/* History Filters */}
                 {activeTab === 'history' && (
-                    <div className="flex flex-wrap items-end gap-3 mb-6 p-1 animate-in fade-in slide-in-from-top-1">
+                    <div className="flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2">
                         {isAdmin && (
                             <div className="flex flex-col gap-1 w-full sm:w-auto">
                                 <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
@@ -563,14 +584,15 @@ export default function HealthAndSafetyData() {
                                 }}
                                 className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                             >
-                                Clear Filters
+                                Clear
                             </button>
                         )}
                     </div>
                 )}
+                </div>
 
                 {/* Table Container */}
-                <div className="border border-border/50 rounded-xl overflow-hidden bg-card/50 shadow-sm backdrop-blur-[2px]">
+                <div ref={scrollContainerRef} onScroll={handleScroll} className="border border-border/50 rounded-xl overflow-hidden bg-card/50 shadow-sm backdrop-blur-[2px] max-h-[580px] overflow-y-scroll">
                     {/* Desktop Table View */}
                     <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-sm text-left border-collapse">
@@ -714,7 +736,7 @@ export default function HealthAndSafetyData() {
                                                         </a>
                                                     )}
                                                     {activeTab === 'history' ? (
-                                                        null // Hide upload in history
+                                                        null
                                                     ) : task.isUploading ? (
                                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                             <Loader2 className="h-3 w-3 animate-spin" />
@@ -722,26 +744,20 @@ export default function HealthAndSafetyData() {
                                                         </div>
                                                     ) : (
                                                         <div className="relative group/file">
-                                                            {(task.require_attachment === true || task.require_attachment === 'Yes') ? (
-                                                                <>
-                                                                    <button
-                                                                        disabled={!selectedRows.has(task.task_id)}
-                                                                        className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                                                                    >
-                                                                        <Upload className="h-3 w-3" />
-                                                                        <span>Upload</span>
-                                                                    </button>
-                                                                    <input
-                                                                        disabled={!selectedRows.has(task.task_id)}
-                                                                        type="file"
-                                                                        accept="image/*"
-                                                                        onChange={(e) => handleFileUpload(task.task_id, e.target.files?.[0])}
-                                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed text-[0]"
-                                                                    />
-                                                                </>
-                                                            ) : (
-                                                                <span className="text-xs text-muted-foreground/50 select-none">-</span>
-                                                            )}
+                                                            <button
+                                                                disabled={!selectedRows.has(task.task_id)}
+                                                                className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                                                            >
+                                                                <Upload className="h-3 w-3" />
+                                                                <span>{task.uploaded_image ? 'Change' : 'Upload'}</span>
+                                                            </button>
+                                                            <input
+                                                                disabled={!selectedRows.has(task.task_id)}
+                                                                type="file"
+                                                                accept="image/*"
+                                                                onChange={(e) => handleFileUpload(task.task_id, e.target.files?.[0])}
+                                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed text-[0]"
+                                                            />
                                                         </div>
                                                     )}
                                                 </div>
@@ -854,14 +870,14 @@ export default function HealthAndSafetyData() {
                                             )}
                                         </div>
                                         <div className="flex gap-3">
-                                            {activeTab !== 'history' && !task.isUploading && (task.require_attachment === true || task.require_attachment === 'Yes') && (
+                                            {activeTab !== 'history' && !task.isUploading && (
                                                 <div className="relative">
                                                     <button
                                                         disabled={!selectedRows.has(task.task_id)}
                                                         className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                                                     >
                                                         <Upload className="h-3 w-3" />
-                                                        Upload
+                                                        {task.uploaded_image ? 'Change' : 'Upload'}
                                                     </button>
                                                     <input
                                                         disabled={!selectedRows.has(task.task_id)}
@@ -911,7 +927,7 @@ export default function HealthAndSafetyData() {
                             </button>
 
                             <span className="text-xs font-medium px-2">
-                                Page {currentPage} of {totalPages}
+                                Page {currentPage} of {Math.max(1, totalPages)}
                             </span>
 
                             <button

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { supabase } from "../../supabase"
 import {
     Loader2,
@@ -48,12 +48,22 @@ export default function AccountData() {
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1)
-    const itemsPerPage = 500
+    const itemsPerPage = 250
+    const [visibleItemsInBuffer, setVisibleItemsInBuffer] = useState(25)
+    const scrollContainerRef = useRef(null)
 
     useEffect(() => {
         setSelectedRows(new Set())
         setCurrentPage(1)
+        setVisibleItemsInBuffer(25)
     }, [activeTab, searchTerm, historyFilterName, historyStartDate, historyEndDate, upcomingFilterName, upcomingStartDate, upcomingEndDate])
+
+    useEffect(() => {
+        setVisibleItemsInBuffer(25)
+        if (scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = 0
+        }
+    }, [currentPage])
 
     useEffect(() => {
         fetchTasks()
@@ -351,11 +361,26 @@ export default function AccountData() {
         return 0
     })
 
-    // Pagination logic
+    // Hybrid Pagination + Infinite Scroll logic
     const indexOfLastItem = currentPage * itemsPerPage
     const indexOfFirstItem = indexOfLastItem - itemsPerPage
-    const currentItems = filteredTasks.slice(indexOfFirstItem, indexOfLastItem)
+    
+    // Within the current page of 250, only show visibleItemsInBuffer (starting at 9)
+    const currentItems = filteredTasks
+        .slice(indexOfFirstItem, indexOfLastItem)
+        .slice(0, visibleItemsInBuffer)
+
     const totalPages = Math.ceil(filteredTasks.length / itemsPerPage)
+
+    const handleScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target
+        // Load more within the current 250 items buffer
+        if (scrollHeight - scrollTop <= clientHeight + 50) {
+            if (visibleItemsInBuffer < itemsPerPage && visibleItemsInBuffer < (filteredTasks.length - indexOfFirstItem)) {
+                setVisibleItemsInBuffer(prev => prev + 25)
+            }
+        }
+    }
 
     const toggleSelectAll = () => {
         const allOnPageSelected = currentItems.length > 0 && currentItems.every(t => selectedRows.has(t.task_id))
@@ -443,136 +468,142 @@ export default function AccountData() {
                     </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex items-center gap-1 p-1 bg-muted/30 rounded-lg w-fit mb-6">
-                    <button
-                        onClick={() => setActiveTab('upcoming')}
-                        className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'upcoming'
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                            }`}
-                    >
-                        Upcoming Tasks
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('history')}
-                        className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'history'
-                            ? 'bg-background text-foreground shadow-sm'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                            }`}
-                    >
-                        History
-                    </button>
+                {/* Tabs and Filters */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pt-2">
+                    <div className="flex items-center gap-1 p-1 bg-muted/30 rounded-lg w-fit shrink-0">
+                        <button
+                            onClick={() => setActiveTab('upcoming')}
+                            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'upcoming'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                }`}
+                        >
+                            Upcoming Tasks
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'history'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                }`}
+                        >
+                            History
+                        </button>
+                    </div>
+
+                    {/* Upcoming Filters */}
+                    {activeTab === 'upcoming' && (
+                        <div className="flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2">
+                            {isAdmin && (
+                                <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                    <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
+                                    <select
+                                        value={upcomingFilterName}
+                                        onChange={(e) => setUpcomingFilterName(e.target.value)}
+                                        className="h-9 px-3 w-full sm:w-48 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                    >
+                                        <option value="">All Names</option>
+                                        {uniqueUpcomingNames.map(name => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Start Date</label>
+                                <input
+                                    type="date"
+                                    value={upcomingStartDate}
+                                    onChange={(e) => setUpcomingStartDate(e.target.value)}
+                                    className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">End Date</label>
+                                <input
+                                    type="date"
+                                    min={upcomingStartDate}
+                                    value={upcomingEndDate}
+                                    onChange={(e) => setUpcomingEndDate(e.target.value)}
+                                    className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                />
+                            </div>
+                            {(upcomingFilterName || upcomingStartDate || upcomingEndDate) && (
+                                <button
+                                    onClick={() => {
+                                        setUpcomingFilterName("")
+                                        setUpcomingStartDate("")
+                                        setUpcomingEndDate("")
+                                    }}
+                                    className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {/* History Filters */}
+                    {activeTab === 'history' && (
+                        <div className="flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2">
+                            {isAdmin && (
+                                <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                    <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
+                                    <select
+                                        value={historyFilterName}
+                                        onChange={(e) => setHistoryFilterName(e.target.value)}
+                                        className="h-9 px-3 w-full sm:w-48 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                    >
+                                        <option value="">All Names</option>
+                                        {uniqueHistoryNames.map(name => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+                            <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Start Date</label>
+                                <input
+                                    type="date"
+                                    value={historyStartDate}
+                                    onChange={(e) => setHistoryStartDate(e.target.value)}
+                                    className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">End Date</label>
+                                <input
+                                    type="date"
+                                    min={historyStartDate}
+                                    value={historyEndDate}
+                                    onChange={(e) => setHistoryEndDate(e.target.value)}
+                                    className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                />
+                            </div>
+                            {(historyFilterName || historyStartDate || historyEndDate) && (
+                                <button
+                                    onClick={() => {
+                                        setHistoryFilterName("")
+                                        setHistoryStartDate("")
+                                        setHistoryEndDate("")
+                                    }}
+                                    className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    )}
                 </div>
-
-                {/* Upcoming Filters */}
-                {activeTab === 'upcoming' && (
-                    <div className="flex flex-wrap items-end gap-3 mb-6 p-1 animate-in fade-in slide-in-from-top-1">
-                        {isAdmin && (
-                            <div className="flex flex-col gap-1 w-full sm:w-auto">
-                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
-                                <select
-                                    value={upcomingFilterName}
-                                    onChange={(e) => setUpcomingFilterName(e.target.value)}
-                                    className="h-9 px-3 w-full sm:w-48 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                                >
-                                    <option value="">All Names</option>
-                                    {uniqueUpcomingNames.map(name => (
-                                        <option key={name} value={name}>{name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-                        <div className="flex flex-col gap-1 w-full sm:w-auto">
-                            <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Start Date</label>
-                            <input
-                                type="date"
-                                value={upcomingStartDate}
-                                onChange={(e) => setUpcomingStartDate(e.target.value)}
-                                className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                            />
-                        </div>
-                        <div className="flex flex-col gap-1 w-full sm:w-auto">
-                            <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">End Date</label>
-                            <input
-                                type="date"
-                                min={upcomingStartDate}
-                                value={upcomingEndDate}
-                                onChange={(e) => setUpcomingEndDate(e.target.value)}
-                                className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                            />
-                        </div>
-                        {(upcomingFilterName || upcomingStartDate || upcomingEndDate) && (
-                            <button
-                                onClick={() => {
-                                    setUpcomingFilterName("")
-                                    setUpcomingStartDate("")
-                                    setUpcomingEndDate("")
-                                }}
-                                className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                            >
-                                Clear Filters
-                            </button>
-                        )}
-                    </div>
-                )}
-
-                {/* History Filters */}
-                {activeTab === 'history' && (
-                    <div className="flex flex-wrap items-end gap-3 mb-6 p-1 animate-in fade-in slide-in-from-top-1">
-                        {isAdmin && (
-                            <div className="flex flex-col gap-1 w-full sm:w-auto">
-                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
-                                <select
-                                    value={historyFilterName}
-                                    onChange={(e) => setHistoryFilterName(e.target.value)}
-                                    className="h-9 px-3 w-full sm:w-48 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                                >
-                                    <option value="">All Names</option>
-                                    {uniqueHistoryNames.map(name => (
-                                        <option key={name} value={name}>{name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-                        <div className="flex flex-col gap-1 w-full sm:w-auto">
-                            <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Start Date</label>
-                            <input
-                                type="date"
-                                value={historyStartDate}
-                                onChange={(e) => setHistoryStartDate(e.target.value)}
-                                className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                            />
-                        </div>
-                        <div className="flex flex-col gap-1 w-full sm:w-auto">
-                            <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">End Date</label>
-                            <input
-                                type="date"
-                                min={historyStartDate}
-                                value={historyEndDate}
-                                onChange={(e) => setHistoryEndDate(e.target.value)}
-                                className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                            />
-                        </div>
-                        {(historyFilterName || historyStartDate || historyEndDate) && (
-                            <button
-                                onClick={() => {
-                                    setHistoryFilterName("")
-                                    setHistoryStartDate("")
-                                    setHistoryEndDate("")
-                                }}
-                                className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                            >
-                                Clear Filters
-                            </button>
-                        )}
-                    </div>
-                )}
 
                 {/* Table Container */}
                 <div className="border border-border/50 rounded-xl overflow-hidden bg-card/50 shadow-sm backdrop-blur-[2px]">
                     {/* Desktop Table View */}
-                    <div className="hidden md:block overflow-x-auto">
+                    <div 
+                        ref={scrollContainerRef}
+                        onScroll={handleScroll}
+                        className="hidden md:block overflow-y-scroll overflow-x-auto max-h-[580px]"
+                    >
                         <table className="w-full text-sm text-left border-collapse">
                             <thead className="bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                                 <tr>
@@ -722,26 +753,20 @@ export default function AccountData() {
                                                         </div>
                                                     ) : (
                                                         <div className="relative group/file">
-                                                            {(task.require_attachment === true || task.require_attachment === 'Yes') ? (
-                                                                <>
-                                                                    <button
-                                                                        disabled={!selectedRows.has(task.task_id)}
-                                                                        className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                                                                    >
-                                                                        <Upload className="h-3 w-3" />
-                                                                        <span>Upload</span>
-                                                                    </button>
-                                                                    <input
-                                                                        disabled={!selectedRows.has(task.task_id)}
-                                                                        type="file"
-                                                                        accept="image/*"
-                                                                        onChange={(e) => handleFileUpload(task.task_id, e.target.files?.[0])}
-                                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed text-[0]"
-                                                                    />
-                                                                </>
-                                                            ) : (
-                                                                <span className="text-xs text-muted-foreground/50 select-none">-</span>
-                                                            )}
+                                                            <button
+                                                                disabled={!selectedRows.has(task.task_id)}
+                                                                className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                                                            >
+                                                                <Upload className="h-3 w-3" />
+                                                                <span>{task.uploaded_image ? "Change" : "Upload"}</span>
+                                                            </button>
+                                                            <input
+                                                                disabled={!selectedRows.has(task.task_id)}
+                                                                type="file"
+                                                                accept="image/*"
+                                                                onChange={(e) => handleFileUpload(task.task_id, e.target.files?.[0])}
+                                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed text-[0]"
+                                                            />
                                                         </div>
                                                     )}
                                                 </div>
@@ -854,14 +879,14 @@ export default function AccountData() {
                                             )}
                                         </div>
                                         <div className="flex gap-3">
-                                            {activeTab !== 'history' && !task.isUploading && (task.require_attachment === true || task.require_attachment === 'Yes') && (
+                                            {activeTab !== 'history' && !task.isUploading && (
                                                 <div className="relative">
                                                     <button
                                                         disabled={!selectedRows.has(task.task_id)}
                                                         className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                                                     >
                                                         <Upload className="h-3 w-3" />
-                                                        Upload
+                                                        {task.uploaded_image ? "Change" : "Upload"}
                                                     </button>
                                                     <input
                                                         disabled={!selectedRows.has(task.task_id)}
@@ -911,7 +936,7 @@ export default function AccountData() {
                             </button>
 
                             <span className="text-xs font-medium px-2">
-                                Page {currentPage} of {totalPages}
+                                Page {currentPage} of {Math.max(1, totalPages)}
                             </span>
 
                             <button
@@ -933,7 +958,6 @@ export default function AccountData() {
                         </div>
                     </div>
                 )}
-
                 {/* View History Modal */}
                 {isHistoryOpen && selectedTask && (
                     <HistoryModal
