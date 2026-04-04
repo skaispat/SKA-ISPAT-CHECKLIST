@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { BellRing, FileCheck, Calendar, ChevronLeft, ChevronRight, Check } from "lucide-react"
+import { BellRing, FileCheck, Calendar, ChevronLeft, ChevronRight, Check, AlertCircle } from "lucide-react"
 import AdminLayout from "../../components/layout/AdminLayout"
 import { supabase } from "../../supabase"
 import Toast from "../../components/Toast"
@@ -145,6 +145,9 @@ export default function AssignTask() {
     const [showCalendar, setShowCalendar] = useState(false)
     const [accordionOpen, setAccordionOpen] = useState(false)
     const [workingDays, setWorkingDays] = useState([]) // Store working days
+    const [isWorkingDaysTableMissing, setIsWorkingDaysTableMissing] = useState(
+        sessionStorage.getItem('isWorkingDaysTableMissing') === 'true'
+    )
     const [generationError, setGenerationError] = useState(null)
     const [showToast, setShowToast] = useState(null)
     // Example: Sunday holiday
@@ -180,25 +183,25 @@ export default function AssignTask() {
 
     // Add new state variables for dropdown options
     const [departmentOptions, setDepartmentOptions] = useState([])
+    const [rawDepartmentsData, setRawDepartmentsData] = useState([]) // To store full dept objects
+    const [locationOptions, setLocationOptions] = useState([]) // For Housekeeping split locations
     const [givenByOptions, setGivenByOptions] = useState([]) // Stores {username, full_name} objects
     const [doerOptions, setDoerOptions] = useState([]) // Stores {username, full_name} objects
 
     const frequencies = [
         { value: "one-time", label: "One Time (No Recurrence)" },
         { value: "daily", label: "Daily" },
+        { value: "3-days", label: "Every 3 Days" },
         { value: "weekly", label: "Weekly" },
+        { value: "15-days", label: "Every 15 Days" },
         { value: "monthly", label: "Monthly" },
         { value: "quarterly", label: "Quarterly" },
         { value: "yearly", label: "Yearly" },
-        { value: "end-of-1st-week", label: "End of 1st Week" },
-        { value: "end-of-2nd-week", label: "End of 2nd Week" },
-        { value: "end-of-3rd-week", label: "End of 3rd Week" },
-        { value: "end-of-4th-week", label: "End of 4th Week" },
-        { value: "end-of-last-week", label: "End of Last Week" },
     ]
 
     const [formData, setFormData] = useState({
         department: "",
+        location: "", // New location field
         givenBy: "",
         doer: "",
         title: "",
@@ -211,6 +214,24 @@ export default function AssignTask() {
     const handleChange = (e) => {
         const { name, value } = e.target
         setFormData(prev => ({ ...prev, [name]: value }))
+
+        // Handle splitting locations for HOUSEKEEPING
+        if (name === "department") {
+            if (value === "HOUSEKEEPING") {
+                const dept = rawDepartmentsData.find(d => d.dept_name === "HOUSEKEEPING");
+                if (dept && dept.location) {
+                    // Split comma separated string and trim whitespace
+                    const locations = dept.location.split(",").map(loc => loc.trim()).filter(loc => loc !== "");
+                    setLocationOptions(locations);
+                } else {
+                    setLocationOptions([]);
+                }
+            } else {
+                // Not Housekeeping, clear locations
+                setLocationOptions([]);
+                setFormData(prev => ({ ...prev, location: "" }));
+            }
+        }
     }
 
 
@@ -221,7 +242,7 @@ export default function AssignTask() {
             // Fetch Departments
             const { data: departmentsData, error: deptError } = await supabase
                 .from('departments')
-                .select('dept_name')
+                .select('dept_name, location') // Fetch location column
                 .eq('is_active', true)
                 .order('dept_name');
 
@@ -230,7 +251,7 @@ export default function AssignTask() {
             // Fetch Users (for Given By and Doer)
             const { data: usersData, error: usersError } = await supabase
                 .from('users')
-                .select('full_name, username, role')
+                .select('full_name, username, role, mobile_number')
                 .eq('status', 'active')
                 .order('full_name');
 
@@ -238,6 +259,7 @@ export default function AssignTask() {
 
             if (departmentsData) {
                 setDepartmentOptions(departmentsData.map(d => d.dept_name));
+                setRawDepartmentsData(departmentsData); // Store full objects
             }
 
             if (usersData) {
@@ -269,10 +291,14 @@ export default function AssignTask() {
 
     useEffect(() => {
         fetchDropdownData()
-        fetchWorkingDays().then(data => {
-            if (data) setWorkingDays(data);
-        })
-    }, [])
+
+        // Only fetch if not already marked as missing in this session
+        if (!isWorkingDaysTableMissing) {
+            fetchWorkingDays().then(data => {
+                if (data) setWorkingDays(data);
+            })
+        }
+    }, [isWorkingDaysTableMissing])
 
 
 
@@ -285,7 +311,16 @@ export default function AssignTask() {
                 .eq('is_working_day', true)
                 .order('date', { ascending: true });
 
-            if (error) throw error;
+            if (error) {
+                // PGRST205: Could not find the table in the schema cache
+                if (error.code === 'PGRST205') {
+                    console.warn("Table 'working_days' not found in Supabase. Falling back to default 365-day calendar logic.");
+                    sessionStorage.setItem('isWorkingDaysTableMissing', 'true');
+                    setIsWorkingDaysTableMissing(true);
+                    return [];
+                }
+                throw error;
+            }
 
             if (!data || data.length === 0) {
                 console.log("No working day data found in Supabase");
@@ -471,6 +506,7 @@ export default function AssignTask() {
                 frequency: formData.frequency,
                 enableReminders: formData.enableReminders,
                 requireAttachment: formData.requireAttachment,
+                location: formData.location, // Added location
             }]);
             setAccordionOpen(true);
             return;
@@ -507,8 +543,8 @@ export default function AssignTask() {
             }
         }
 
-        // 🔥 Skip selected weekdays ONLY for DAILY frequency
-        if (formData.frequency === "daily" && skipDays.length > 0) {
+        // 🔥 Skip selected weekdays for all RECURRING frequencies
+        if (formData.frequency !== "one-time" && skipDays.length > 0) {
             futureDates = futureDates.filter(dateStr => {
                 const weekday = getWeekdayKeyFromDDMMYYYY(dateStr);
                 return !skipDays.includes(weekday);
@@ -555,6 +591,7 @@ export default function AssignTask() {
                 frequency: formData.frequency,
                 enableReminders: formData.enableReminders,
                 requireAttachment: formData.requireAttachment,
+                location: formData.location, // Added location
             });
         } else if (formData.frequency === "daily") {
             // Generate tasks for next 365 working days (or less if calendar ends)
@@ -572,6 +609,7 @@ export default function AssignTask() {
                     frequency: formData.frequency,
                     enableReminders: formData.enableReminders,
                     requireAttachment: formData.requireAttachment,
+                    location: formData.location, // Added location
                 });
             }
         } else if (formData.frequency === "yearly") {
@@ -598,6 +636,7 @@ export default function AssignTask() {
                 frequency: formData.frequency,
                 enableReminders: formData.enableReminders,
                 requireAttachment: formData.requireAttachment,
+                location: formData.location, // Added location
             });
         } else if (formData.frequency === "monthly") {
             // Generate 1 task for each of the next 12 months (Total 12 tasks)
@@ -627,6 +666,7 @@ export default function AssignTask() {
                     frequency: formData.frequency,
                     enableReminders: formData.enableReminders,
                     requireAttachment: formData.requireAttachment,
+                    location: formData.location, // Added location
                 });
             }
 
@@ -658,6 +698,7 @@ export default function AssignTask() {
                     frequency: formData.frequency,
                     enableReminders: formData.enableReminders,
                     requireAttachment: formData.requireAttachment,
+                    location: formData.location, // Added location
                 });
             }
         } else if (formData.frequency === "weekly") {
@@ -686,12 +727,46 @@ export default function AssignTask() {
                     frequency: formData.frequency,
                     enableReminders: formData.enableReminders,
                     requireAttachment: formData.requireAttachment,
+                    location: formData.location, // Added location
                 });
 
                 // Find date + 7 days
                 const [d, m, y] = taskDateStr.split('/').map(Number);
                 const currentDate = new Date(y, m - 1, d);
                 const targetDate = addDays(currentDate, 7);
+                const targetDateStr = formatDateToDDMMYYYY(targetDate);
+
+                const nextIndex = findClosestWorkingDayIndex(futureDates, targetDateStr);
+                if (nextIndex !== -1 && nextIndex > currentIndex) {
+                    currentIndex = nextIndex;
+                } else {
+                    break;
+                }
+            }
+        } else if (formData.frequency === "15-days" || formData.frequency === "3-days") {
+            const intervalDays = formData.frequency === "15-days" ? 15 : 3;
+            let currentIndex = startIndex;
+            while (currentIndex < futureDates.length) {
+                const taskDateStr = futureDates[currentIndex];
+
+                tasks.push({
+                    title: formData.title,
+                    description: formData.description,
+                    department: formData.department,
+                    givenBy: formData.givenBy,
+                    doer: formData.doer,
+                    dueDate: taskDateStr,
+                    status: "pending",
+                    frequency: formData.frequency,
+                    enableReminders: formData.enableReminders,
+                    requireAttachment: formData.requireAttachment,
+                    location: formData.location, // Added location
+                });
+
+                // Find date + intervalDays
+                const [d, m, y] = taskDateStr.split('/').map(Number);
+                const currentDate = new Date(y, m - 1, d);
+                const targetDate = addDays(currentDate, intervalDays);
                 const targetDateStr = formatDateToDDMMYYYY(targetDate);
 
                 const nextIndex = findClosestWorkingDayIndex(futureDates, targetDateStr);
@@ -711,7 +786,8 @@ export default function AssignTask() {
     useEffect(() => {
         const timer = setTimeout(() => {
             // Check if required fields are present before trying to auto-generate
-            if (date && formData.doer && formData.title && formData.frequency && formData.description && formData.department && formData.givenBy) {
+            const isLocationValid = formData.department !== "HOUSEKEEPING" || formData.location;
+            if (date && formData.doer && formData.title && formData.frequency && formData.description && formData.department && formData.givenBy && isLocationValid) {
                 generateTasks(true);
             } else {
                 setGeneratedTasks([]); // Clear tasks if required fields are missing
@@ -727,6 +803,7 @@ export default function AssignTask() {
         if (window.confirm("Are you sure you want to cancel? All unsaved changes will be lost.")) {
             setFormData({
                 department: "",
+                location: "", // Reset location
                 givenBy: "",
                 doer: "",
                 title: "",
@@ -766,6 +843,10 @@ export default function AssignTask() {
                 const [day, month, year] = task.dueDate.split('/');
                 const formattedDate = `${year}-${month}-${day}`;
 
+                // Find the doer's mobile number for WhatsApp notification
+                const doerObj = doerOptions.find(u => u.full_name === task.doer);
+                const whatsappNo = doerObj ? doerObj.mobile_number : null;
+
                 return {
                     timestamp: timestampIST, // Send Kolkata time with offset
                     department: task.department,
@@ -778,6 +859,8 @@ export default function AssignTask() {
                     enable_reminders: task.enableReminders,
                     require_attachment: task.requireAttachment,
                     skip_days: task.frequency === "daily" ? skipDays : [],
+                    whatsapp_no: whatsappNo, // For WhatsApp notification
+                    location: [task.location], // Wrap in array as database type is text[]
                     status: 'pending' // Default status
                 };
             });
@@ -796,6 +879,7 @@ export default function AssignTask() {
             // Reset form
             setFormData({
                 department: "",
+                location: "", // Reset location
                 givenBy: "",
                 doer: "",
                 title: "",
@@ -838,7 +922,7 @@ export default function AssignTask() {
                         <div className="p-5 space-y-4">
 
                             {/* Row 1: Dropdowns (Department, Given By, Doer, Frequency) - 4 Columns */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className={`grid grid-cols-1 ${formData.department === "HOUSEKEEPING" ? "md:grid-cols-5" : "md:grid-cols-4"} gap-4`}>
                                 {/* Department Name Dropdown */}
                                 <div className="space-y-1">
                                     <label htmlFor="department" className="block text-xs font-medium text-gray-700">
@@ -866,6 +950,35 @@ export default function AssignTask() {
                                     </div>
                                 </div>
 
+                                {/* Conditional Location Dropdown for HOUSEKEEPING */}
+                                {formData.department === "HOUSEKEEPING" && (
+                                    <div className="space-y-1 animate-in fade-in slide-in-from-left-2 duration-300">
+                                        <label htmlFor="location" className="block text-xs font-medium text-gray-700">
+                                            Location <span className="text-red-500">*</span>
+                                        </label>
+                                        <div className="relative">
+                                            <select
+                                                id="location"
+                                                name="location"
+                                                value={formData.location}
+                                                onChange={handleChange}
+                                                required
+                                                className="w-full appearance-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#991B1B] focus:outline-none focus:ring-1 focus:ring-[#991B1B] transition-all"
+                                            >
+                                                <option value="">Select Location</option>
+                                                {locationOptions.map((loc, index) => (
+                                                    <option key={index} value={loc}>
+                                                        {loc}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                                                <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Given By Dropdown */}
                                 <div className="space-y-1">
                                     <label htmlFor="givenBy" className="block text-xs font-medium text-gray-700">
@@ -881,11 +994,10 @@ export default function AssignTask() {
                                             className="w-full appearance-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#991B1B] focus:outline-none focus:ring-1 focus:ring-[#991B1B] transition-all"
                                         >
                                             <option value="">Select Delegator</option>
-                                            {givenByOptions.map((user) => (
-                                                <option key={user.username} value={user.username}>
-                                                    {user.full_name}
-                                                </option>
-                                            ))}
+                                            <option value="Pawan Tiwari">Pawan Tiwari</option>
+                                            <option value="Abhishek Agrawal">Abhishek Agrawal</option>
+                                            <option value="Kushal Rathod">Kushal Rathod</option>
+                                            <option value="Rohini Jaiswal">Rohini Jaiswal</option>
                                         </select>
                                         <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
                                             <svg className="h-3 w-3 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
@@ -1155,6 +1267,7 @@ export default function AssignTask() {
                         <div className="p-6 bg-gray-50 rounded-b-2xl flex flex-col sm:flex-row items-center justify-between space-y-3 sm:space-y-0 sm:space-x-4 border-t border-gray-100">
                             {/* Cancel Button - Only visible when fields are entered */}
                             {(formData.department ||
+                                formData.location || // Check location too
                                 formData.givenBy ||
                                 formData.doer ||
                                 formData.title ||

@@ -44,6 +44,7 @@ CREATE TABLE public.users (
   status text NOT NULL DEFAULT 'active'::text,
   user_access text,
   dept_id bigint,
+  mobile_number text,
   CONSTRAINT users_pkey PRIMARY KEY (emp_id),
   CONSTRAINT fk_users_department FOREIGN KEY (dept_id) REFERENCES public.departments(dept_id)
 );

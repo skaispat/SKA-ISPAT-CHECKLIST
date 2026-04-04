@@ -42,7 +42,7 @@ export default function AdminLayout({ children }) {
     { id: "store", name: "Store", link: "/dashboard/data/store" },
     { id: "account", name: "Account", link: "/dashboard/data/account" },
     { id: "security", name: "Security", link: "/dashboard/data/security" },
-    { id: "slag-crusher", name: "Slag Crusher", link: "/dashboard/data/slag-crusher" },
+    // { id: "slag-crusher", name: "Slag Crusher", link: "/dashboard/data/slag-crusher" },
     { id: "hr", name: "HR", link: "/dashboard/data/hr" },
     { id: "mgmt", name: "MGMT", link: "/dashboard/data/mgmt" },
     { id: "health-and-safety", name: "Health and Safety", link: "/dashboard/data/health-and-safety" },

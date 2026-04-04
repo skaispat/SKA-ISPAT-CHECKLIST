@@ -184,6 +184,13 @@ export default function HouseKeepingData() {
             return;
         }
 
+        // Check for required Doer Name
+        const missingDoers = tasksToSubmit.filter(t => !t.doers_name);
+        if (missingDoers.length > 0) {
+            alert(`Please select a Doer Name for all selected tasks.`);
+            return;
+        }
+
         setIsBatchConfirmOpen(true)
     }
 
@@ -197,11 +204,15 @@ export default function HouseKeepingData() {
                 // If batchRemarks provided, use it. Otherwise fall back to inline task.remarks
                 const finalRemarks = batchRemarks ? batchRemarks : task.remarks
 
+                const username = sessionStorage.getItem("username") || "unknown"
+
                 const updateData = {
                     status: 'pending_approval',
                     remarks: finalRemarks,
                     uploaded_image: task.uploaded_image,
-                    actual: new Date().toISOString()
+                    actual: new Date().toISOString().split('T')[0], // Extract only YYYY-MM-DD
+                    doers_name: [task.doers_name], // Wrap in array as database type is text[]
+                    submitter_name: [username]   // Wrap in array as database type is text[]
                 }
 
                 return supabase.from('master_tasks').update(updateData).eq('task_id', taskId)
@@ -432,7 +443,7 @@ export default function HouseKeepingData() {
                                 className="px-4 py-2 bg-secondary text-secondary-foreground text-sm font-medium rounded-full hover:bg-secondary/80 transition-all shadow-sm flex items-center gap-2"
                             >
                                 <Edit className="h-4 w-4" />
-                                Edit Task Info
+                                Edit
                             </button>
                         )}
                         {selectedRows.size > 0 && (
@@ -488,107 +499,107 @@ export default function HouseKeepingData() {
 
                     {/* Upcoming Filters */}
                     {activeTab === 'upcoming' && (
-                        <div className="flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2">
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2">
                             {isAdmin && (
+                                <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                    <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
+                                    <select
+                                        value={upcomingFilterName}
+                                        onChange={(e) => setUpcomingFilterName(e.target.value)}
+                                        className="h-9 px-3 w-full sm:w-48 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                    >
+                                        <option value="">All Names</option>
+                                        {uniqueUpcomingNames.map(name => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="flex flex-col gap-1 w-full sm:w-auto">
-                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
-                                <select
-                                    value={upcomingFilterName}
-                                    onChange={(e) => setUpcomingFilterName(e.target.value)}
-                                    className="h-9 px-3 w-full sm:w-48 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                                >
-                                    <option value="">All Names</option>
-                                    {uniqueUpcomingNames.map(name => (
-                                        <option key={name} value={name}>{name}</option>
-                                    ))}
-                                </select>
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Start Date</label>
+                                <input
+                                    type="date"
+                                    value={upcomingStartDate}
+                                    onChange={(e) => setUpcomingStartDate(e.target.value)}
+                                    className="h-9 px-3 w-full text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                />
                             </div>
-                        )}
-                        <div className="flex flex-col gap-1 w-full sm:w-auto">
-                            <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Start Date</label>
-                            <input
-                                type="date"
-                                value={upcomingStartDate}
-                                onChange={(e) => setUpcomingStartDate(e.target.value)}
-                                className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                            />
+                            <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">End Date</label>
+                                <input
+                                    type="date"
+                                    min={upcomingStartDate}
+                                    value={upcomingEndDate}
+                                    onChange={(e) => setUpcomingEndDate(e.target.value)}
+                                    className="h-9 px-3 w-full text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                />
+                            </div>
+                            {(upcomingFilterName || upcomingStartDate || upcomingEndDate) && (
+                                <button
+                                    onClick={() => {
+                                        setUpcomingFilterName("")
+                                        setUpcomingStartDate("")
+                                        setUpcomingEndDate("")
+                                    }}
+                                    className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors col-span-2 sm:col-span-1"
+                                >
+                                    Clear
+                                </button>
+                            )}
                         </div>
-                        <div className="flex flex-col gap-1 w-full sm:w-auto">
-                            <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">End Date</label>
-                            <input
-                                type="date"
-                                min={upcomingStartDate}
-                                value={upcomingEndDate}
-                                onChange={(e) => setUpcomingEndDate(e.target.value)}
-                                className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                            />
-                        </div>
-                        {(upcomingFilterName || upcomingStartDate || upcomingEndDate) && (
-                            <button
-                                onClick={() => {
-                                    setUpcomingFilterName("")
-                                    setUpcomingStartDate("")
-                                    setUpcomingEndDate("")
-                                }}
-                                className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                            >
-                                Clear
-                            </button>
-                        )}
-                    </div>
-                )}
+                    )}
 
-                {/* History Filters */}
-                {activeTab === 'history' && (
-                    <div className="flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2">
-                        {isAdmin && (
+                    {/* History Filters */}
+                    {activeTab === 'history' && (
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2">
+                            {isAdmin && (
+                                <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                    <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
+                                    <select
+                                        value={historyFilterName}
+                                        onChange={(e) => setHistoryFilterName(e.target.value)}
+                                        className="h-9 px-3 w-full sm:w-48 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                    >
+                                        <option value="">All Names</option>
+                                        {uniqueHistoryNames.map(name => (
+                                            <option key={name} value={name}>{name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="flex flex-col gap-1 w-full sm:w-auto">
-                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
-                                <select
-                                    value={historyFilterName}
-                                    onChange={(e) => setHistoryFilterName(e.target.value)}
-                                    className="h-9 px-3 w-full sm:w-48 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                                >
-                                    <option value="">All Names</option>
-                                    {uniqueHistoryNames.map(name => (
-                                        <option key={name} value={name}>{name}</option>
-                                    ))}
-                                </select>
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Start Date</label>
+                                <input
+                                    type="date"
+                                    value={historyStartDate}
+                                    onChange={(e) => setHistoryStartDate(e.target.value)}
+                                    className="h-9 px-3 w-full text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                />
                             </div>
-                        )}
-                        <div className="flex flex-col gap-1 w-full sm:w-auto">
-                            <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Start Date</label>
-                            <input
-                                type="date"
-                                value={historyStartDate}
-                                onChange={(e) => setHistoryStartDate(e.target.value)}
-                                className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                            />
+                            <div className="flex flex-col gap-1 w-full sm:w-auto">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">End Date</label>
+                                <input
+                                    type="date"
+                                    min={historyStartDate}
+                                    value={historyEndDate}
+                                    onChange={(e) => setHistoryEndDate(e.target.value)}
+                                    className="h-9 px-3 w-full text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                />
+                            </div>
+                            {(historyFilterName || historyStartDate || historyEndDate) && (
+                                <button
+                                    onClick={() => {
+                                        setHistoryFilterName("")
+                                        setHistoryStartDate("")
+                                        setHistoryEndDate("")
+                                    }}
+                                    className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors col-span-2 sm:col-span-1"
+                                >
+                                    Clear
+                                </button>
+                            )}
                         </div>
-                        <div className="flex flex-col gap-1 w-full sm:w-auto">
-                            <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">End Date</label>
-                            <input
-                                type="date"
-                                min={historyStartDate}
-                                value={historyEndDate}
-                                onChange={(e) => setHistoryEndDate(e.target.value)}
-                                className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
-                            />
-                        </div>
-                        {(historyFilterName || historyStartDate || historyEndDate) && (
-                            <button
-                                onClick={() => {
-                                    setHistoryFilterName("")
-                                    setHistoryStartDate("")
-                                    setHistoryEndDate("")
-                                }}
-                                className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
-                            >
-                                Clear
-                            </button>
-                        )}
-                    </div>
-                )}
+                    )}
                 </div>
 
                 {/* Table Container */}
@@ -616,6 +627,10 @@ export default function HouseKeepingData() {
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Department</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Given By</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Name</th>
+                                    <th className="px-4 py-3 whitespace-nowrap font-medium">Location</th>
+                                    {activeTab === 'history' && <th className="px-4 py-3 whitespace-nowrap font-medium">Doer Name</th>}
+                                    {activeTab === 'history' && <th className="px-4 py-3 whitespace-nowrap font-medium">Submitter</th>}
+                                    {activeTab !== 'history' && <th className="px-4 py-3 whitespace-nowrap min-w-[150px] font-medium">Doer Name</th>}
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[450px] font-medium">Task Title</th>
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[500px] font-medium">Task Description</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Freq</th>
@@ -672,6 +687,38 @@ export default function HouseKeepingData() {
                                             <td className="px-4 py-3 text-muted-foreground">{task.department}</td>
                                             <td className="px-4 py-3 text-muted-foreground">{task.given_by_username}</td>
                                             <td className="px-4 py-3 text-muted-foreground font-medium">{task.name}</td>
+                                            <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-medium">
+                                                {Array.isArray(task.location) ? task.location.join(', ') : (task.location || '-')}
+                                            </td>
+                                            {activeTab === 'history' && (
+                                                <>
+                                                    <td className="px-4 py-3 text-muted-foreground">
+                                                        {Array.isArray(task.doers_name) ? task.doers_name.join(', ') : (task.doers_name || '-')}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-muted-foreground">
+                                                        {Array.isArray(task.submitter_name) ? task.submitter_name.join(', ') : (task.submitter_name || '-')}
+                                                    </td>
+                                                </>
+                                            )}
+                                            {activeTab !== 'history' && (
+                                                <td className="px-4 py-3">
+                                                    <select
+                                                        disabled={!selectedRows.has(task.task_id)}
+                                                        value={Array.isArray(task.doers_name) ? task.doers_name[0] : (task.doers_name || '')}
+                                                        onChange={(e) => handleLocalUpdate(task.task_id, { doers_name: e.target.value })}
+                                                        required
+                                                        className={`block w-full px-2 py-1.5 text-xs font-semibold rounded-md border-0 bg-transparent ring-1 ring-inset ring-primary/20 focus:ring-2 focus:ring-inset focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed`}
+                                                    >
+                                                        <option value="">Select Doer</option>
+                                                        <option value="Laxmi Bai">Laxmi Bai</option>
+                                                        <option value="Murgan Bai">Murgan Bai</option>
+                                                        <option value="Gangotri Bai">Gangotri Bai</option>
+                                                        <option value="Lalita bai">Lalita bai</option>
+                                                        <option value="Karman Bai">Karman Bai</option>
+                                                        <option value="Contractor Labour">Contractor Labour</option>
+                                                    </select>
+                                                </td>
+                                            )}
                                             <td className="px-4 py-3 font-medium text-foreground">
                                                 <div title={task.task_title} className="line-clamp-2">
                                                     {task.task_title}
@@ -816,8 +863,32 @@ export default function HouseKeepingData() {
                                             <span>Start:</span>
                                             <span className="font-medium text-foreground">{formatDate(task.task_start_date)}</span>
                                         </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span>Location:</span>
+                                            <span className="font-medium text-foreground">{Array.isArray(task.location) ? task.location.join(', ') : (task.location || '-')}</span>
+                                        </div>
                                         <div>Given By: {task.given_by_username}</div>
                                     </div>
+
+                                    {activeTab !== 'history' && (
+                                        <div className="pt-2">
+                                            <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider mb-1 block">Doer Name</label>
+                                            <select
+                                                disabled={!selectedRows.has(task.task_id)}
+                                                value={Array.isArray(task.doers_name) ? task.doers_name[0] : (task.doers_name || '')}
+                                                onChange={(e) => handleLocalUpdate(task.task_id, { doers_name: e.target.value })}
+                                                className={`block w-full px-2 py-2 text-xs font-semibold rounded-md border-0 bg-background ring-1 ring-inset ring-primary/20 focus:ring-2 focus:ring-inset focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed`}
+                                            >
+                                                <option value="">Select Doer</option>
+                                                <option value="Laxmi Bai">Laxmi Bai</option>
+                                                <option value="Murgan Bai">Murgan Bai</option>
+                                                <option value="Gangotri Bai">Gangotri Bai</option>
+                                                <option value="Lalita bai">Lalita bai</option>
+                                                <option value="Karman Bai">Karman Bai</option>
+                                                <option value="Contractor Labour">Contractor Labour</option>
+                                            </select>
+                                        </div>
+                                    )}
 
                                     {activeTab !== 'history' && (
                                         <div className="pt-2 flex items-center gap-3 border-t border-border/30">
@@ -1070,22 +1141,24 @@ function HistoryModal({ task, onClose }) {
                 <div className="overflow-y-auto p-0 flex-1">
                     <table className="w-full text-sm text-left border-collapse">
                         <thead className="bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold sticky top-0 backdrop-blur-sm">
-                            <tr>
-                                <th className="px-4 py-3 font-medium">Date</th>
-                                <th className="px-4 py-3 font-medium">User</th>
-                                <th className="px-4 py-3 font-medium">Status</th>
-                                <th className="px-4 py-3 font-medium">Remarks</th>
-                                <th className="px-4 py-3 font-medium">Actual Time</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border/30">
-                            {loading ? (
-                                <tr><td colSpan="5" className="p-8 text-center text-muted-foreground">Loading history...</td></tr>
-                            ) : filteredHistory.length === 0 ? (
-                                <tr><td colSpan="5" className="p-8 text-center text-muted-foreground">No history records found.</td></tr>
-                            ) : (
-                                filteredHistory.map(item => (
-                                    <tr key={item.task_id} className="hover:bg-muted/20 transition-colors">
+                                <tr>
+                                    <th className="px-4 py-3 font-medium text-left">Date</th>
+                                    <th className="px-4 py-3 font-medium text-left">Assigned</th>
+                                    <th className="px-4 py-3 font-medium text-left">Doer Name</th>
+                                    <th className="px-4 py-3 font-medium text-left">Submitter</th>
+                                    <th className="px-4 py-3 font-medium text-center">Status</th>
+                                    <th className="px-4 py-3 font-medium text-left">Remarks</th>
+                                    <th className="px-4 py-3 font-medium text-left">Actual Time</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border/30">
+                                {loading ? (
+                                    <tr><td colSpan="7" className="p-8 text-center text-muted-foreground animate-pulse">Loading history...</td></tr>
+                                ) : filteredHistory.length === 0 ? (
+                                    <tr><td colSpan="7" className="p-8 text-center text-muted-foreground">No history records found.</td></tr>
+                                ) : (
+                                    filteredHistory.map(item => (
+                                        <tr key={item.task_id} className="hover:bg-muted/20 transition-all duration-200">
                                         <td className="px-4 py-3 whitespace-nowrap">
                                             <span className="font-medium">
                                                 {(() => {
@@ -1097,9 +1170,15 @@ function HistoryModal({ task, onClose }) {
                                                 {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3">
-                                            <span className="font-medium text-foreground">{item.given_by_username}</span>
-                                            {item.name && <span className="text-muted-foreground text-xs ml-1">({item.name})</span>}
+                                        <td className="px-4 py-3 whitespace-nowrap">
+                                            <div className="font-medium text-foreground">{item.given_by_username}</div>
+                                            {item.name && <div className="text-muted-foreground text-[10px]">Assignee: {item.name}</div>}
+                                        </td>
+                                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                                            {Array.isArray(item.doers_name) ? item.doers_name.join(', ') : (item.doers_name || '-')}
+                                        </td>
+                                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-primary font-medium">
+                                            {Array.isArray(item.submitter_name) ? item.submitter_name.join(', ') : (item.submitter_name || '-')}
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${item.status === 'Yes' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>

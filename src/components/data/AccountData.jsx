@@ -364,7 +364,7 @@ export default function AccountData() {
     // Hybrid Pagination + Infinite Scroll logic
     const indexOfLastItem = currentPage * itemsPerPage
     const indexOfFirstItem = indexOfLastItem - itemsPerPage
-    
+
     // Within the current page of 250, only show visibleItemsInBuffer (starting at 9)
     const currentItems = filteredTasks
         .slice(indexOfFirstItem, indexOfLastItem)
@@ -599,7 +599,7 @@ export default function AccountData() {
                 {/* Table Container */}
                 <div className="border border-border/50 rounded-xl overflow-hidden bg-card/50 shadow-sm backdrop-blur-[2px]">
                     {/* Desktop Table View */}
-                    <div 
+                    <div
                         ref={scrollContainerRef}
                         onScroll={handleScroll}
                         className="hidden md:block overflow-y-scroll overflow-x-auto max-h-[580px]"

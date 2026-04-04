@@ -261,10 +261,8 @@ const UserDashboard = () => {
                             <div className="p-6">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-lg font-semibold text-gray-900">
-                                        <h3 className="text-lg font-semibold text-gray-900">
-                                            {taskView === "upcoming" && "Upcoming Tasks"}
-                                            {taskView === "overdue" && "Overdue Tasks"}
-                                        </h3>
+                                        {taskView === "upcoming" && "Upcoming Tasks"}
+                                        {taskView === "overdue" && "Overdue Tasks"}
                                     </h3>
                                 </div>
 

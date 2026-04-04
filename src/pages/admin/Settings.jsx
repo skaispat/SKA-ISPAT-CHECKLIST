@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import AdminLayout from "../../components/layout/AdminLayout"
 import { supabase } from "../../supabase"
-import { User, Lock, Save, UserPlus, Edit2, X, Search, Eye, EyeOff, AlertTriangle } from 'lucide-react'
+import { User, Lock, Save, UserPlus, Edit2, X, Search, Eye, EyeOff, AlertTriangle, Phone } from 'lucide-react'
 import Toast from "../../components/Toast"
 
 const AVAILABLE_PAGES = [
@@ -38,6 +38,7 @@ export default function Settings() {
         department: "",
         full_name: "",
         dept_id: null,
+        mobile_number: "",
         user_access: []
     })
 
@@ -46,7 +47,8 @@ export default function Settings() {
         username: "",
         password: "",
         full_name: "",
-        department: ""
+        department: "",
+        mobile_number: ""
     })
 
     useEffect(() => {
@@ -93,7 +95,8 @@ export default function Settings() {
                 username: data.username,
                 password: data.password,
                 full_name: data.full_name || "",
-                department: data.department || ""
+                department: data.department || "",
+                mobile_number: data.mobile_number || ""
             })
 
         } catch (error) {
@@ -124,6 +127,7 @@ export default function Settings() {
             department: "",
             full_name: "",
             dept_id: null,
+            mobile_number: "",
             // Default access: All pages except 'assign_task'
             user_access: AVAILABLE_PAGES.filter(p => p.id !== 'assign_task').map(p => p.id)
         })
@@ -142,6 +146,7 @@ export default function Settings() {
             department: user.department || "",
             full_name: user.full_name || "",
             dept_id: user.dept_id,
+            mobile_number: user.mobile_number || "",
             user_access: user.user_access ? user.user_access.split(',') : []
         })
         setIsEditing(true)
@@ -201,6 +206,12 @@ export default function Settings() {
                 throw new Error("Username must contain only lowercase letters and numbers, with no spaces or special characters.")
             }
 
+            // Mobile number validation
+            if (!formData.mobile_number) throw new Error("Mobile number is required")
+            if (!/^\d{10}$/.test(formData.mobile_number)) {
+                throw new Error("Mobile number must be exactly 10 digits")
+            }
+
             const userAccessString = formData.role === 'admin' ? 'all' : (formData.user_access || []).join(',')
 
             if (isEditing) {
@@ -214,6 +225,7 @@ export default function Settings() {
                         department: formData.department,
                         full_name: formData.full_name,
                         dept_id: formData.dept_id,
+                        mobile_number: formData.mobile_number,
                         user_access: userAccessString
                     })
                     .eq('emp_id', formData.emp_id)
@@ -256,6 +268,7 @@ export default function Settings() {
                 .update({
                     password: profileData.password,
                     full_name: profileData.full_name,
+                    mobile_number: profileData.mobile_number
                 })
                 .eq('username', sessionStorage.getItem("username"))
 
@@ -349,7 +362,7 @@ export default function Settings() {
                                                 </div>
                                             )}
                                             <div className="space-y-2">
-                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Full Name</label>
+                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Full Name <span className="text-red-500">*</span></label>
                                                 <input
                                                     type="text"
                                                     required
@@ -360,7 +373,7 @@ export default function Settings() {
                                                 />
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Username</label>
+                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Username <span className="text-red-500">*</span></label>
                                                 <input
                                                     type="text"
                                                     required
@@ -372,7 +385,7 @@ export default function Settings() {
                                                 <p className="text-[10px] text-gray-400 mt-1">Only lowercase letters and numbers allowed.</p>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Password</label>
+                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Password {!isEditing && <span className="text-red-500">*</span>}</label>
                                                 <div className="relative">
                                                     <input
                                                         type={showPassword ? "text" : "password"}
@@ -392,7 +405,7 @@ export default function Settings() {
                                                 </div>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Role</label>
+                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Role <span className="text-red-500">*</span></label>
                                                 <div className="relative">
                                                     <select
                                                         className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#991B1B]/10 focus:border-[#991B1B] outline-none transition-all appearance-none bg-white text-sm"
@@ -408,7 +421,7 @@ export default function Settings() {
                                                 </div>
                                             </div>
                                             <div className="space-y-2">
-                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Department</label>
+                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Department <span className="text-red-500">*</span></label>
                                                 <div className="relative">
                                                     <select
                                                         required
@@ -435,6 +448,18 @@ export default function Settings() {
                                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                                                     </div>
                                                 </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Mobile Number <span className="text-red-500">*</span></label>
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    maxLength="10"
+                                                    placeholder="10-digit number"
+                                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#991B1B]/10 focus:border-[#991B1B] outline-none transition-all text-sm"
+                                                    value={formData.mobile_number}
+                                                    onChange={(e) => setFormData({ ...formData, mobile_number: e.target.value.replace(/\D/g, '') })}
+                                                />
                                             </div>
                                         </div>
 
@@ -527,6 +552,7 @@ export default function Settings() {
                                             <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">ID</th>
                                             <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">User Details</th>
                                             <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Role</th>
+                                            <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Contact</th>
                                             <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Department</th>
                                             <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</th>
                                         </tr>
@@ -570,6 +596,16 @@ export default function Settings() {
                                                             }`}>
                                                             {user.role}
                                                         </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-medium">
+                                                        {user.mobile_number ? (
+                                                            <div className="flex items-center gap-1.5 ">
+                                                                <Phone size={12} className="text-gray-400" />
+                                                                {user.mobile_number}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-gray-300 italic">No number</span>
+                                                        )}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                                                         {user.department || <span className="text-gray-300 italic">None</span>}
@@ -636,7 +672,11 @@ export default function Settings() {
                                                 </span>
                                             </div>
                                             <div className="flex justify-between items-center text-xs text-gray-500">
-                                                <div>@{user.username}</div>
+                                                <div className="flex items-center gap-1">
+                                                    <div className="font-medium text-gray-700">@{user.username}</div>
+                                                    {user.mobile_number && <span className="text-gray-300">•</span>}
+                                                    {user.mobile_number && <div className="flex items-center gap-1"><Phone size={10} /> {user.mobile_number}</div>}
+                                                </div>
                                                 <div>{user.department || 'No Dept'}</div>
                                             </div>
                                             <div className="flex justify-between items-center pt-2 border-t border-gray-50/50 mt-2">
@@ -696,7 +736,7 @@ export default function Settings() {
                                         </div>
 
                                         <div className="space-y-2">
-                                            <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Full Name</label>
+                                            <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Full Name <span className="text-red-500">*</span></label>
                                             <input
                                                 type="text"
                                                 required
@@ -704,6 +744,22 @@ export default function Settings() {
                                                 value={profileData.full_name}
                                                 onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
                                             />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Mobile Number <span className="text-red-500">*</span></label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    required
+                                                    maxLength="10"
+                                                    placeholder="10-digit number"
+                                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#991B1B]/10 focus:border-[#991B1B] outline-none transition-all text-sm"
+                                                    value={profileData.mobile_number}
+                                                    onChange={(e) => setProfileData({ ...profileData, mobile_number: e.target.value.replace(/\D/g, '') })}
+                                                />
+                                                <Phone className="absolute left-3 top-3 text-gray-400" size={16} />
+                                            </div>
                                         </div>
                                     </div>
 
