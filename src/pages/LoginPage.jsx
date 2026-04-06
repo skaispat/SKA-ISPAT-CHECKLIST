@@ -4,10 +4,12 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "../supabase"
 import sarthakLogo from "../assets/sarthak_logo.jpg"
+import { Eye, EyeOff } from 'lucide-react'
 
 const LoginPage = () => {
   const navigate = useNavigate()
   const [isLoginLoading, setIsLoginLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -134,13 +136,20 @@ const LoginPage = () => {
                 </div>
                 <input
                   name="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   value={formData.password}
                   onChange={handleChange}
-                  className="block w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 placeholder-gray-400 focus:outline-none focus:border-[#991B1B] focus:ring-4 focus:ring-red-50/50 transition-all bg-gray-50/30 hover:bg-white"
+                  className="block w-full pl-11 pr-12 py-3 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 placeholder-gray-400 focus:outline-none focus:border-[#991B1B] focus:ring-4 focus:ring-red-50/50 transition-all bg-gray-50/30 hover:bg-white"
                   placeholder="Enter your password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-[#991B1B] transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             </div>
 
