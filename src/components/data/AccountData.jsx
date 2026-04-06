@@ -25,20 +25,22 @@ import {
 import AdminLayout from "../layout/AdminLayout"
 
 export default function AccountData() {
+    const todayStr = new Date().toLocaleDateString('en-CA')
     const [tasks, setTasks] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState("")
-    const [activeTab, setActiveTab] = useState("upcoming")
+    const [activeTab, setActiveTab] = useState("today")
 
     // History Tab Filters
     const [historyFilterName, setHistoryFilterName] = useState("")
     const [historyStartDate, setHistoryStartDate] = useState("")
     const [historyEndDate, setHistoryEndDate] = useState("")
 
-    // Upcoming Tab Filters
-    const [upcomingFilterName, setUpcomingFilterName] = useState("")
-    const [upcomingStartDate, setUpcomingStartDate] = useState("")
-    const [upcomingEndDate, setUpcomingEndDate] = useState("")
+    // Pending (Today & Overdue) Tab Filters
+    const [pendingFilterName, setPendingFilterName] = useState("")
+    const [pendingStartDate, setPendingStartDate] = useState("")
+    const [pendingEndDate, setPendingEndDate] = useState("")
+    const [showMobileFilters, setShowMobileFilters] = useState(false)
 
     // Modal states
     const [selectedTask, setSelectedTask] = useState(null)
@@ -56,7 +58,7 @@ export default function AccountData() {
         setSelectedRows(new Set())
         setCurrentPage(1)
         setVisibleItemsInBuffer(25)
-    }, [activeTab, searchTerm, historyFilterName, historyStartDate, historyEndDate, upcomingFilterName, upcomingStartDate, upcomingEndDate])
+    }, [activeTab, searchTerm, historyFilterName, historyStartDate, historyEndDate, pendingFilterName, pendingStartDate, pendingEndDate])
 
     useEffect(() => {
         setVisibleItemsInBuffer(25)
@@ -149,8 +151,11 @@ export default function AccountData() {
                 page++
             }
 
+            // Deduplicate tasks by task_id to prevent React "duplicate key" errors
+            const uniqueData = Array.from(new Map(allData.map(item => [item.task_id, item])).values())
+
             // Store original status as db_status for filtering
-            setTasks(allData.map(t => ({ ...t, db_status: t.status })))
+            setTasks(uniqueData.map(t => ({ ...t, db_status: t.status })))
         } catch (error) {
             console.error("Error fetching tasks:", error)
         } finally {
@@ -255,9 +260,9 @@ export default function AccountData() {
         .map(t => t.name)
     )].sort()
 
-    // Get unique names for the upcoming filter dropdown
-    const uniqueUpcomingNames = [...new Set(tasks
-        .filter(t => t.db_status !== 'Yes' && t.db_status !== 'pending_approval' && t.name) // Simplified for dropdown
+    // Get unique names for the pending filter dropdown (Today & Overdue)
+    const uniquePendingNames = [...new Set(tasks
+        .filter(t => t.db_status !== 'Yes' && t.db_status !== 'pending_approval' && t.name)
         .map(t => t.name)
     )].sort()
 
@@ -266,16 +271,21 @@ export default function AccountData() {
             String(val).toLowerCase().includes(searchTerm.toLowerCase())
         )
 
-        // Logic Update:
-        // History: Status is 'Yes' OR 'pending_approval' (Since user submitted it, it shouldn't be in upcoming)
-        // Upcoming: Status is NOT ('Yes' or 'pending_approval') OR Status IS 'rejected' (so they can re-do)
+        const todayStr = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local
+        const taskDateStr = task.task_start_date ? task.task_start_date.substring(0, 10) : null
 
         const isCompletedOrPending = task.db_status === 'Yes' || task.db_status === 'pending_approval'
         const isRejected = task.db_status === 'rejected'
+        const isNotSubmitted = !isCompletedOrPending || isRejected
 
-        const matchesTab = activeTab === 'history'
-            ? isCompletedOrPending
-            : (!isCompletedOrPending || isRejected)
+        let matchesTab = false
+        if (activeTab === 'history') {
+            matchesTab = isCompletedOrPending
+        } else if (activeTab === 'today') {
+            matchesTab = isNotSubmitted && (taskDateStr === todayStr || !taskDateStr)
+        } else if (activeTab === 'overdue') {
+            matchesTab = isNotSubmitted && taskDateStr && taskDateStr < todayStr
+        }
 
         let matchesFilters = true
         if (activeTab === 'history') {
@@ -284,79 +294,45 @@ export default function AccountData() {
                 matchesFilters = false
             }
             // Filter by Date Range (Start Date)
-            // Using string comparison on first 10 chars (YYYY-MM-DD) covers both date-only and ISO timestamp strings correctly
-            if (historyStartDate) {
-                if (!task.task_start_date || task.task_start_date.substring(0, 10) < historyStartDate) {
-                    matchesFilters = false
-                }
-            }
-            if (historyEndDate) {
-                if (!task.task_start_date || task.task_start_date.substring(0, 10) > historyEndDate) {
-                    matchesFilters = false
-                }
-            }
-        } else if (activeTab === 'upcoming') {
-            // Filter by Name
-            if (upcomingFilterName && !task.name?.toLowerCase().includes(upcomingFilterName.toLowerCase())) {
+            if (historyStartDate && (!task.task_start_date || task.task_start_date.substring(0, 10) < historyStartDate)) {
                 matchesFilters = false
             }
-
-            // Filter by Date Range
-            if (upcomingStartDate) {
-                if (!task.task_start_date || task.task_start_date.substring(0, 10) < upcomingStartDate) {
-                    matchesFilters = false
-                }
+            if (historyEndDate && (!task.task_start_date || task.task_start_date.substring(0, 10) > historyEndDate)) {
+                matchesFilters = false
             }
-            if (upcomingEndDate) {
-                if (!task.task_start_date || task.task_start_date.substring(0, 10) > upcomingEndDate) {
-                    matchesFilters = false
-                }
+        } else if (activeTab === 'today' || activeTab === 'overdue') {
+            // Filter by Name
+            if (pendingFilterName && !task.name?.toLowerCase().includes(pendingFilterName.toLowerCase())) {
+                matchesFilters = false
+            }
+            // Filter by Date Range
+            if (pendingStartDate && (!task.task_start_date || task.task_start_date.substring(0, 10) < pendingStartDate)) {
+                matchesFilters = false
+            }
+            if (pendingEndDate && (!task.task_start_date || task.task_start_date.substring(0, 10) > pendingEndDate)) {
+                matchesFilters = false
             }
         }
 
         return matchesSearch && matchesTab && matchesFilters
     }).sort((a, b) => {
         if (activeTab === 'history') {
-            // Priority 1: Pending Approval (show at top)
-            // Priority 2: Sort by date descending (newest first)
-
             const isPendingA = a.db_status === 'pending_approval'
             const isPendingB = b.db_status === 'pending_approval'
-
-            if (isPendingA !== isPendingB) {
-                return isPendingA ? -1 : 1
-            }
-
-            // Both are same status (both pending or both completed), sort by date
+            if (isPendingA !== isPendingB) return isPendingA ? -1 : 1
             const dateA = a.actual ? new Date(a.actual) : (a.timestamp ? new Date(a.timestamp) : new Date(0))
             const dateB = b.actual ? new Date(b.actual) : (b.timestamp ? new Date(b.timestamp) : new Date(0))
-
             return dateB - dateA
         }
 
-        if (activeTab === 'upcoming') {
-            // Get start of today
-            const today = new Date()
-            today.setHours(0, 0, 0, 0)
+        if (activeTab === 'today' || activeTab === 'overdue') {
+            const dateA = a.task_start_date ? new Date(a.task_start_date) : new Date(0)
+            const dateB = b.task_start_date ? new Date(b.task_start_date) : new Date(0)
 
-            const dateA = a.task_start_date ? new Date(a.task_start_date) : new Date('9999-12-31')
-            const dateB = b.task_start_date ? new Date(b.task_start_date) : new Date('9999-12-31')
-
-            // Normalize task dates to be comparable with today (strip time if present/inconsistent)
-            // Just comparing the raw Date objects is usually safest for ordering, 
-            // but for "Past vs Future" categorization we need to be careful.
-            // Let's just use the timestamps.
-
-            const isPastA = dateA < today
-            const isPastB = dateB < today
-
-            // If one is past and the other is future/today, future comes first
-            if (isPastA !== isPastB) {
-                return isPastA ? 1 : -1
+            if (activeTab === 'overdue') {
+                return dateA - dateB // Oldest overdue first
             }
-
-            // Otherwise sort by date ascending
-            return dateA - dateB
+            return dateB - dateA // Today's newest first
         }
         return 0
     })
@@ -437,7 +413,7 @@ export default function AccountData() {
                                 className="px-4 py-2 bg-secondary text-secondary-foreground text-sm font-medium rounded-full hover:bg-secondary/80 transition-all shadow-sm flex items-center gap-2"
                             >
                                 <Edit className="h-4 w-4" />
-                                Edit Task Info
+                                Edit
                             </button>
                         )}
                         {selectedRows.size > 0 && (
@@ -448,6 +424,13 @@ export default function AccountData() {
                                 Submit {selectedRows.size} Tasks
                             </button>
                         )}
+                        <button
+                            onClick={() => setShowMobileFilters(!showMobileFilters)}
+                            className={`sm:hidden p-2 rounded-full transition-all ${showMobileFilters ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}`}
+                            title="Toggle Filters"
+                        >
+                            <Filter className="h-4 w-4" />
+                        </button>
                         <div className="relative w-full sm:w-64 group">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
                             <input
@@ -468,42 +451,65 @@ export default function AccountData() {
                     </div>
                 </div>
 
-                {/* Tabs and Filters */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pt-2">
                     <div className="flex items-center gap-1 p-1 bg-muted/30 rounded-lg w-fit shrink-0">
                         <button
-                            onClick={() => setActiveTab('upcoming')}
-                            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'upcoming'
+                            onClick={() => setActiveTab('today')}
+                            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all relative ${activeTab === 'today'
                                 ? 'bg-background text-foreground shadow-sm'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                                 }`}
                         >
-                            Upcoming Tasks
+                            Today's Tasks
+                            {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && (t.task_start_date?.substring(0, 10) === todayStr || !t.task_start_date)).length > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
+                                    {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && (t.task_start_date?.substring(0, 10) === todayStr || !t.task_start_date)).length}
+                                </span>
+                            )}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('overdue')}
+                            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all relative ${activeTab === 'overdue'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                }`}
+                        >
+                            Overdue Tasks
+                            {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && t.task_start_date && t.task_start_date.substring(0, 10) < todayStr).length > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
+                                    {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && t.task_start_date && t.task_start_date.substring(0, 10) < todayStr).length}
+                                </span>
+                            )}
                         </button>
                         <button
                             onClick={() => setActiveTab('history')}
-                            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all ${activeTab === 'history'
+                            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all relative ${activeTab === 'history'
                                 ? 'bg-background text-foreground shadow-sm'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                                 }`}
                         >
                             History
+                            {tasks.filter(t => t.db_status === 'Yes' || t.db_status === 'pending_approval').length > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-500 text-[10px] text-white">
+                                    {tasks.filter(t => t.db_status === 'Yes' || t.db_status === 'pending_approval').length}
+                                </span>
+                            )}
                         </button>
                     </div>
 
-                    {/* Upcoming Filters */}
-                    {activeTab === 'upcoming' && (
-                        <div className="flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2">
+                    {/* Pending (Today & Overdue) Filters */}
+                    {(activeTab === 'today' || activeTab === 'overdue') && (
+                        <div className={`flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2 ${showMobileFilters ? 'flex' : 'hidden sm:flex'}`}>
                             {isAdmin && (
                                 <div className="flex flex-col gap-1 w-full sm:w-auto">
                                     <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
                                     <select
-                                        value={upcomingFilterName}
-                                        onChange={(e) => setUpcomingFilterName(e.target.value)}
+                                        value={pendingFilterName}
+                                        onChange={(e) => setPendingFilterName(e.target.value)}
                                         className="h-9 px-3 w-full sm:w-48 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
                                     >
                                         <option value="">All Names</option>
-                                        {uniqueUpcomingNames.map(name => (
+                                        {uniquePendingNames.map(name => (
                                             <option key={name} value={name}>{name}</option>
                                         ))}
                                     </select>
@@ -513,8 +519,8 @@ export default function AccountData() {
                                 <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Start Date</label>
                                 <input
                                     type="date"
-                                    value={upcomingStartDate}
-                                    onChange={(e) => setUpcomingStartDate(e.target.value)}
+                                    value={pendingStartDate}
+                                    onChange={(e) => setPendingStartDate(e.target.value)}
                                     className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
                                 />
                             </div>
@@ -522,18 +528,18 @@ export default function AccountData() {
                                 <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">End Date</label>
                                 <input
                                     type="date"
-                                    min={upcomingStartDate}
-                                    value={upcomingEndDate}
-                                    onChange={(e) => setUpcomingEndDate(e.target.value)}
+                                    min={pendingStartDate}
+                                    value={pendingEndDate}
+                                    onChange={(e) => setPendingEndDate(e.target.value)}
                                     className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
                                 />
                             </div>
-                            {(upcomingFilterName || upcomingStartDate || upcomingEndDate) && (
+                            {(pendingFilterName || pendingStartDate || pendingEndDate) && (
                                 <button
                                     onClick={() => {
-                                        setUpcomingFilterName("")
-                                        setUpcomingStartDate("")
-                                        setUpcomingEndDate("")
+                                        setPendingFilterName("")
+                                        setPendingStartDate("")
+                                        setPendingEndDate("")
                                     }}
                                     className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                                 >
@@ -545,7 +551,7 @@ export default function AccountData() {
 
                     {/* History Filters */}
                     {activeTab === 'history' && (
-                        <div className="flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2">
+                        <div className={`flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2 ${showMobileFilters ? 'flex' : 'hidden sm:flex'}`}>
                             {isAdmin && (
                                 <div className="flex flex-col gap-1 w-full sm:w-auto">
                                     <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
