@@ -603,10 +603,15 @@ export default function AdminDashboard() {
                 });
             });
 
+            const todayStr = new Date().toLocaleDateString('en-CA');
+
             const processedTasks = tasksData.map((row) => {
                 const assignedTo = row.name || 'Unassigned';
+                const taskDateStr = row.task_start_date ? row.task_start_date.substring(0, 10) : null;
+                const isDueUpToToday = taskDateStr && taskDateStr <= todayStr;
+                const isDueToday = taskDateStr === todayStr;
 
-                // Initialize staff in map if not present (e.g. if name in task doesn't match user table exactly)
+                // Initialize staff in map if not present
                 if (!staffTrackingMap.has(assignedTo)) {
                     staffTrackingMap.set(assignedTo, {
                         name: assignedTo,
@@ -635,45 +640,39 @@ export default function AdminDashboard() {
                     derivedStatus = 'pending';
                 }
 
-                // Populate stats
-                totalTasks++;
-                const staffData = staffTrackingMap.get(assignedTo);
-                staffData.totalTasks++;
+                // Populate stats (only for tasks due up to today as per user request)
+                if (isDueUpToToday) {
+                    totalTasks++;
+                    const staffData = staffTrackingMap.get(assignedTo);
+                    if (staffData) staffData.totalTasks++;
 
-                if (isCompleted) {
-                    completedTasks++;
-                    statusData.Completed++;
-                    staffData.completedTasks++;
+                    if (isCompleted) {
+                        completedTasks++;
+                        statusData.Completed++;
+                        if (staffData) staffData.completedTasks++;
 
-                    // Monthly stats - use actual completion date
-                    if (completedDate) {
-                        const monthName = completedDate.toLocaleString('default', { month: 'short' });
-                        if (monthlyData[monthName]) {
-                            monthlyData[monthName].completed++;
+                        // Monthly stats - use actual completion date
+                        if (completedDate) {
+                            const monthName = completedDate.toLocaleString('default', { month: 'short' });
+                            if (monthlyData[monthName]) {
+                                monthlyData[monthName].completed++;
+                            }
+                        } else if (taskDate) {
+                            // Fallback to task date if actual missing but status is Yes
+                            const monthName = taskDate.toLocaleString('default', { month: 'short' });
+                            if (monthlyData[monthName]) monthlyData[monthName].completed++;
                         }
-                    } else if (taskDate) {
-                        // Fallback to task date if actual missing but status is Yes
-                        const monthName = taskDate.toLocaleString('default', { month: 'short' });
-                        if (monthlyData[monthName]) monthlyData[monthName].completed++;
-                    }
-
-                } else {
-                    // Pending or Overdue
-                    staffData.pendingTasks++;
-
-                    if (derivedStatus === 'overdue') {
-                        overdueTasks++;
-                        statusData.Overdue++;
                     } else {
-                        pendingTasks++;
-                        statusData.Pending++;
-                    }
+                        // Pending or Overdue (only for tasks till today)
+                        if (staffData) staffData.pendingTasks++;
 
-                    // Monthly stats - use task planned date
-                    if (taskDate) {
-                        const monthName = taskDate.toLocaleString('default', { month: 'short' });
-                        if (monthlyData[monthName]) {
-                            monthlyData[monthName].pending++;
+                        if (derivedStatus === 'overdue') {
+                            overdueTasks++;
+                            statusData.Overdue++;
+                        } else if (isDueToday) {
+                            // Only count today's tasks in the pending stat
+                            pendingTasks++;
+                            statusData.Pending++;
                         }
                     }
                 }
@@ -1035,11 +1034,11 @@ export default function AdminDashboard() {
 
     return (
         <AdminLayout>
-            <div className="space-y-8 animate-in fade-in duration-500">
+            <div className="space-y-6 md:space-y-8 p-3 md:p-0 animate-in fade-in duration-500">
                 {/* Header */}
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center border-b border-gray-100 pb-6">
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center border-b border-gray-100 pb-4 md:pb-6">
                     <div className="space-y-1">
-                        <h1 className="text-3xl font-bold tracking-tight text-gray-900">Admin Dashboard</h1>
+                        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Admin Dashboard</h1>
                         <p className="text-sm text-gray-500">Manage tasks, departments and reports.</p>
                     </div>
                     <div>
@@ -1061,7 +1060,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Stats Grid */}
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 md:gap-6 lg:grid-cols-4">
                     <StatCard
                         title="Total Tasks"
                         value={departmentData.totalTasks}
@@ -1109,7 +1108,7 @@ export default function AdminDashboard() {
                                 </div>
                             </div>
 
-                            <div className="p-6">
+                            <div className="p-4 md:p-6">
                                 <div className="flex flex-col gap-4 md:flex-row mb-6">
                                     <div className="relative flex-1">
                                         <Filter className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -1208,7 +1207,7 @@ export default function AdminDashboard() {
                                         ) : (
                                             <div className="divide-y divide-gray-100">
                                                 {getTasksByView(taskView).slice(0, visibleTasksCount).map((task) => (
-                                                    <div key={task.id} className="p-4 space-y-3 hover:bg-[#FEF2F2]/30 transition-colors">
+                                                    <div key={task.id} className="p-3 md:p-4 space-y-2 md:space-y-3 hover:bg-[#FEF2F2]/30 transition-colors">
                                                         <div className="flex justify-between items-start gap-2">
                                                             <div className="text-sm font-medium text-gray-900 line-clamp-2" title={task.title}>
                                                                 {task.title}
@@ -1589,21 +1588,21 @@ const StatCard = ({ title, value, description, icon, accentColor = "gray", alert
     return (
         <div
             onClick={onClick}
-            className={`group relative overflow-hidden rounded-xl border p-6 transition-all hover:shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${style.border} ${style.bg}`}
+            className={`group relative overflow-hidden rounded-xl border p-4 md:p-6 transition-all hover:shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${style.border} ${style.bg}`}
         >
             <div className="flex items-center justify-between">
-                <div className={`rounded-lg p-2 ${style.iconBg}`}>
-                    {icon && <div className="h-5 w-5">{icon}</div>}
+                <div className={`rounded-lg p-1.5 md:p-2 ${style.iconBg}`}>
+                    {icon && <div className="h-4 w-4 md:h-5 md:w-5">{icon}</div>}
                 </div>
             </div>
-            <div className="mt-4">
-                <h3 className={`text-sm font-medium ${style.subtext}`}>{title}</h3>
-                <div className="mt-2 flex items-baseline gap-2">
-                    <span className={`text-3xl font-bold tracking-tight ${style.text}`}>
+            <div className="mt-3 md:mt-4">
+                <h3 className={`text-[10px] md:text-sm font-medium uppercase tracking-wide md:normal-case ${style.subtext}`}>{title}</h3>
+                <div className="mt-1 md:mt-2 flex items-baseline gap-2">
+                    <span className={`text-xl md:text-3xl font-bold tracking-tight ${style.text}`}>
                         {value}
                     </span>
                 </div>
-                <p className={`mt-1 text-xs ${style.subtext}`}>{description}</p>
+                <p className={`mt-0.5 md:mt-1 text-[10px] md:text-xs line-clamp-1 ${style.subtext}`}>{description}</p>
             </div>
         </div>
     )
@@ -1638,7 +1637,7 @@ const MISStatCard = ({ label, value, subValue, alert = false, icon, bg, accent, 
     const textColor = alert ? 'text-red-700' : (accent === 'blue' ? 'text-blue-700' : 'text-green-700');
 
     return (
-        <div className={`p-5 rounded-xl border border-gray-100 bg-white hover:shadow-md transition-all duration-200 group`}>
+        <div className={`p-4 md:p-5 rounded-xl border border-gray-100 bg-white hover:shadow-md transition-all duration-200 group`}>
             <div className="flex items-start justify-between mb-4">
                 <div>
                     <p className="text-xs font-medium text-gray-500">{label}</p>

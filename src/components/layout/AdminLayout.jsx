@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { CheckSquare, ClipboardList, Menu, Database, KeyRound, Video, Settings, ListTodo, FileCheck, Calendar } from 'lucide-react'
+import { CheckSquare, ClipboardList, Menu, Database, KeyRound, Video, Settings, ListTodo, FileCheck, Calendar, User, Share2 } from 'lucide-react'
 import Sidebar from "./Sidebar"
 
 export default function AdminLayout({ children }) {
@@ -41,6 +41,7 @@ export default function AdminLayout({ children }) {
     { id: "housekeeping", name: "HouseKeeping", link: "/dashboard/data/housekeeping" },
     { id: "store", name: "Store", link: "/dashboard/data/store" },
     { id: "account", name: "Account", link: "/dashboard/data/account" },
+    { id: "admin", name: "Admin", link: "/dashboard/data/admin" },
     { id: "security", name: "Security", link: "/dashboard/data/security" },
     // { id: "slag-crusher", name: "Slag Crusher", link: "/dashboard/data/slag-crusher" },
     { id: "hr", name: "HR", link: "/dashboard/data/hr" },
@@ -67,8 +68,8 @@ export default function AdminLayout({ children }) {
       label: "My Tasks",
       icon: ListTodo,
       active: location.pathname === "/dashboard/user/tasks",
-      showFor: ["user"], // Only show for user
-      permission: "dashboard"
+      showFor: ["user"], 
+      permission: "tasks"
     },
     {
       href: "/dashboard/assign-task",
@@ -84,24 +85,40 @@ export default function AdminLayout({ children }) {
       icon: FileCheck,
       active: location.pathname === "/dashboard/admin/approval",
       showFor: ["admin"],
-      permission: "assign_task"
+      permission: "admin_approval"
+    },
+    {
+      href: "/dashboard/delegated-tasks",
+      label: "Delegated Tasks",
+      icon: Share2,
+      active: location.pathname === "/dashboard/delegated-tasks",
+      showFor: ["admin", "user"],
+      permission: "delegated_tasks"
     },
     {
       href: "#",
-      label: "Data",
+      label: "Department",
       icon: Database,
       active: location.pathname.includes("/dashboard/data"),
       showFor: ["admin", "user"],
-      permission: "dashboard",
+      permission: "data_pages",
       submenu: true
     },
+    // {
+    //   href: "/dashboard/calendar",
+    //   label: "Calendar",
+    //   icon: Calendar,
+    //   active: location.pathname === "/dashboard/calendar",
+    //   showFor: ["admin", "user"],
+    //   permission: "dashboard"
+    // },
     {
-      href: "/dashboard/calendar",
-      label: "Calendar",
-      icon: Calendar,
-      active: location.pathname === "/dashboard/calendar",
+      href: "/dashboard/profile",
+      label: "My Profile",
+      icon: User,
+      active: location.pathname === "/dashboard/profile",
       showFor: ["admin", "user"],
-      permission: "dashboard"
+      permission: "profile"
     },
     {
       href: "/dashboard/settings",
@@ -109,7 +126,7 @@ export default function AdminLayout({ children }) {
       icon: Settings,
       active: location.pathname === "/dashboard/settings",
       showFor: ["admin", "user"],
-      permission: "profile"
+      permission: "settings"
     },
     {
       href: "/dashboard/license",
@@ -141,25 +158,27 @@ export default function AdminLayout({ children }) {
     const userRole = sessionStorage.getItem('role') || 'user'
     const userAccessStr = sessionStorage.getItem('user_access') || ''
 
-    // Parse permissions (admin usually has 'all', or implied all)
-    const userAccess = userAccessStr.split(',')
+    // Parse permissions
+    const userAccess = userAccessStr.split(',').map(p => p.trim())
     const isAdmin = userRole === 'admin'
 
     return routes.filter(route => {
-      // 1. Check if role is allowed
+      // 1. First Check Role Restriction
       if (route.showFor && !route.showFor.includes(userRole)) {
         return false
       }
 
-      // 2. If Admin, show everything that passed role check
-      if (isAdmin) return true
+      // 2. Strict Access Control (Applied to Admin and User)
+      // Check if user has explicit 'all' permission
+      if (userAccess.includes('all')) return true
 
-      // 3. If User, check specific permission
-      // If a route has a 'permission' key, the user MUST have it in their access list
-      if (route.permission && !userAccess.includes(route.permission)) {
-        return false
+      // If a route has a 'permission' key, user MUST have that specific string in their access list
+      if (route.permission) {
+        if (userAccess.includes(route.permission)) return true
+        return false // If they have permission defined but user doesn't have it, hide it
       }
 
+      // Allow routes with no defined permission (General pages like Profile/Logout etc if not marked)
       return true
     })
   }
@@ -204,9 +223,8 @@ export default function AdminLayout({ children }) {
           {children}
 
         </main>
-        <div className="flex-shrink-0 p-4 border-t border-border bg-card flex flex-col md:flex-row items-center justify-between text-xs text-muted-foreground">
-          <div className="hidden md:block w-1/3"></div>
-          <div className="flex justify-center w-full md:w-1/3">
+        <div className="flex-shrink-0 p-4 border-t border-border bg-card flex items-center justify-center text-xs text-muted-foreground">
+          <div className="flex justify-center">
             <a
               href="https://www.botivate.in/"
               target="_blank"
@@ -215,9 +233,6 @@ export default function AdminLayout({ children }) {
             >
               Powered by <span className="font-semibold text-[#991B1B]">Botivate</span>
             </a>
-          </div>
-          <div className="flex justify-center md:justify-end w-full md:w-1/3 text-center md:text-right mt-2 md:mt-0">
-            © 2025 Botivate Services LLP. All rights reserved.
           </div>
         </div>
       </div>

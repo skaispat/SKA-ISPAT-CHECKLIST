@@ -159,7 +159,7 @@ export default function AdminApproval() {
 
                 {/* Header */}
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
+                    <h1 className="text-2xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
                         <FileCheck className="h-8 w-8 text-[#991B1B]" />
                         Admin Approval
                     </h1>

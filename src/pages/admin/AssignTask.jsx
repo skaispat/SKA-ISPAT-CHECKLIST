@@ -217,6 +217,9 @@ export default function AssignTask() {
 
         // Handle splitting locations for HOUSEKEEPING
         if (name === "department") {
+            // Reset doer when department changes
+            setFormData(prev => ({ ...prev, doer: "" }));
+
             if (value === "HOUSEKEEPING") {
                 const dept = rawDepartmentsData.find(d => d.dept_name === "HOUSEKEEPING");
                 if (dept && dept.location) {
@@ -234,6 +237,16 @@ export default function AssignTask() {
         }
     }
 
+    // Derived state for filtered doer options
+    const filteredDoerOptions = (() => {
+        if (!formData.department) return [];
+
+        const selectedDept = rawDepartmentsData.find(d => d.dept_name === formData.department);
+        if (!selectedDept) return [];
+
+        return doerOptions.filter(user => user.dept_id === selectedDept.dept_id);
+    })();
+
 
 
     // Function to fetch options from Supabase
@@ -242,7 +255,7 @@ export default function AssignTask() {
             // Fetch Departments
             const { data: departmentsData, error: deptError } = await supabase
                 .from('departments')
-                .select('dept_name, location') // Fetch location column
+                .select('dept_id, dept_name, location') // Fetch dept_id and location column
                 .eq('is_active', true)
                 .order('dept_name');
 
@@ -251,7 +264,7 @@ export default function AssignTask() {
             // Fetch Users (for Given By and Doer)
             const { data: usersData, error: usersError } = await supabase
                 .from('users')
-                .select('full_name, username, role, mobile_number')
+                .select('full_name, username, role, mobile_number, dept_id')
                 .eq('status', 'active')
                 .order('full_name');
 
@@ -1019,8 +1032,8 @@ export default function AssignTask() {
                                             required
                                             className="w-full appearance-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#991B1B] focus:outline-none focus:ring-1 focus:ring-[#991B1B] transition-all"
                                         >
-                                            <option value="">Select Doer</option>
-                                            {doerOptions.map((user) => (
+                                            <option value="">{formData.department ? "Select Doer" : "Select Dept First"}</option>
+                                            {filteredDoerOptions.map((user) => (
                                                 <option key={user.username} value={user.full_name}>
                                                     {user.full_name}
                                                 </option>

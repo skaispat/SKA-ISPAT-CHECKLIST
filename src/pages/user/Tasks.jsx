@@ -112,15 +112,36 @@ export default function UserTasks() {
 
   // Filter Logic
   const filteredTasks = tasks.filter(task => {
-    // Status Filter
+    // 1. Exclude future tasks (Upcoming)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const parseLocalDoDate = (dateStr) => {
+      if (!dateStr) return null;
+      if (dateStr.includes('T')) {
+        const d = new Date(dateStr)
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate())
+      }
+      const parts = dateStr.split('-')
+      if (parts.length === 3) {
+        const [y, m, d] = parts.map(Number)
+        return new Date(y, m - 1, d)
+      }
+      return new Date(dateStr)
+    }
+
+    const taskDate = parseLocalDoDate(task.task_start_date)
+    if (taskDate && taskDate > today) return false
+
+    // 2. Status Filter
     const isCompleted = task.status === "Yes"
     if (filterStatus === "pending" && isCompleted) return false
     if (filterStatus === "completed" && !isCompleted) return false
 
-    // Frequency Filter
+    // 3. Frequency Filter
     if (filterFrequency !== "all" && task.freq !== filterFrequency) return false
 
-    // Search Filter
+    // 4. Search Filter
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       return (
@@ -285,14 +306,14 @@ export default function UserTasks() {
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">My Tasks</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-gray-900">My Tasks</h1>
             <p className="text-gray-500 mt-1">
-              Welcome back, <span className="font-semibold text-[#991B1B]">{user?.full_name || "User"}</span>.
-              You have <span className="font-bold">{tasks.filter(t => t.status !== 'Yes').length}</span> pending tasks.
+              <span className="font-semibold text-[#991B1B]">{user?.full_name || "User"}</span>.
+              You have <span className="font-bold">{filteredTasks.filter(t => t.status !== 'Yes' && t.status !== 'pending_approval').length}</span> pending tasks.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* <div className="flex items-center gap-2">
             <button
               onClick={fetchUserAndTasks}
               className="p-2 text-gray-500 hover:text-gray-900 transition-colors bg-white border border-gray-200 rounded-full hover:shadow-sm"
@@ -300,11 +321,11 @@ export default function UserTasks() {
             >
               <Loader2 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
-          </div>
+          </div> */}
         </div>
 
         {/* Filters & Controls */}
-        <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+        <div className="bg-white p-2 rounded-xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
 
           {/* Search */}
           <div className="relative w-full md:w-96">
@@ -375,49 +396,7 @@ export default function UserTasks() {
           </div>
         ) : (
           <div className="space-y-10">
-            {/* Helper to calculate groups */}
             {(() => {
-              const today = new Date()
-              today.setHours(0, 0, 0, 0)
-
-              const tomorrow = new Date(today)
-              tomorrow.setDate(tomorrow.getDate() + 1)
-
-              const groups = { today: [], tomorrow: [], rest: [] }
-
-              const parseLocalDoDate = (dateStr) => {
-                if (!dateStr) return null;
-                if (dateStr.includes('T')) {
-                  const d = new Date(dateStr)
-                  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
-                }
-                const parts = dateStr.split('-')
-                if (parts.length === 3) {
-                  const [y, m, d] = parts.map(Number)
-                  return new Date(y, m - 1, d)
-                }
-                return new Date(dateStr)
-              }
-
-              currentTasks.forEach(task => {
-                const taskDate = parseLocalDoDate(task.task_start_date)
-
-                if (!taskDate) {
-                  groups.rest.push(task)
-                  return
-                }
-                // Ensure time is stripped for comparison
-                taskDate.setHours(0, 0, 0, 0)
-
-                if (taskDate < today || taskDate.getTime() === today.getTime()) {
-                  groups.today.push(task)
-                } else if (taskDate.getTime() === tomorrow.getTime()) {
-                  groups.tomorrow.push(task)
-                } else {
-                  groups.rest.push(task)
-                }
-              })
-
               const renderTable = (tasks, title, icon, isToday = false) => (
                 <div className={`rounded-xl overflow-hidden border ${isToday ? 'border-red-200 shadow-lg shadow-red-50' : 'border-gray-200 shadow-sm'} mb-8`}>
                   {/* Section Header */}
@@ -582,9 +561,7 @@ export default function UserTasks() {
 
               return (
                 <>
-                  {groups.today.length > 0 && renderTable(groups.today, "Today & Overdue", <Clock className="w-4 h-4" />, true)}
-                  {groups.tomorrow.length > 0 && renderTable(groups.tomorrow, "Tomorrow", <CalendarIcon className="w-4 h-4" />, false)}
-                  {groups.rest.length > 0 && renderTable(groups.rest, "Upcoming & Others", <FileText className="w-4 h-4" />, false)}
+                  {currentTasks.length > 0 && renderTable(currentTasks, "Today & Overdue", <Clock className="w-4 h-4" />, true)}
                 </>
               )
             })()}

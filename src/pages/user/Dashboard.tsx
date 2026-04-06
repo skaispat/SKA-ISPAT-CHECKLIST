@@ -103,10 +103,16 @@ const UserDashboard = () => {
                 }
             })
 
-            const total = processedTasks.length
-            const completed = processedTasks.filter(t => t.derivedStatus === 'completed').length
-            const overdue = processedTasks.filter(t => t.derivedStatus === 'overdue').length
-            const pending = processedTasks.filter(t => t.derivedStatus === 'pending').length
+            const todayStr = new Date().toLocaleDateString('en-CA')
+
+            // Filter tasks to only include those till today for stats
+            const tasksTillToday = processedTasks.filter(t => t.task_start_date && t.task_start_date.substring(0, 10) <= todayStr)
+
+            const total = tasksTillToday.length
+            const completed = tasksTillToday.filter(t => t.derivedStatus === 'completed').length
+            const overdue = tasksTillToday.filter(t => t.derivedStatus === 'overdue').length
+            // Pending is strictly today's pending
+            const pending = tasksTillToday.filter(t => t.task_start_date && t.task_start_date.substring(0, 10) === todayStr && t.derivedStatus === 'pending').length
 
             const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0
 
@@ -181,11 +187,11 @@ const UserDashboard = () => {
 
     return (
         <AdminLayout>
-            <div className="space-y-8 p-4 md:p-0 animate-in fade-in duration-500">
+            <div className="space-y-6 md:space-y-8 p-3 md:p-0 animate-in fade-in duration-500">
                 {/* Header Section */}
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center border-b border-gray-100 pb-6">
+                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center border-b border-gray-100 pb-4 md:pb-6">
                     <div className="space-y-1">
-                        <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+                        <h1 className="text-2xl font-bold tracking-tight text-gray-900">
                             My Dashboard
                         </h1>
                         <p className="text-sm text-gray-500">
@@ -202,7 +208,7 @@ const UserDashboard = () => {
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 md:gap-6 lg:grid-cols-4">
                     <StatCard
                         title="Total Tasks"
                         value={stats.total}
@@ -258,7 +264,7 @@ const UserDashboard = () => {
                                 </div>
                             </div>
 
-                            <div className="p-6">
+                            <div className="p-4 md:p-6">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-lg font-semibold text-gray-900">
                                         {taskView === "upcoming" && "Upcoming Tasks"}
@@ -280,7 +286,7 @@ const UserDashboard = () => {
                                         getFilteredTasks(taskView).map((task) => (
                                             <div
                                                 key={task.task_id}
-                                                className="group relative flex items-start gap-4 rounded-lg border border-gray-100 bg-white p-4 transition-all hover:bg-[#FEF2F2]/30 hover:shadow-sm hover:border-[#991B1B]/20"
+                                                className="group relative flex items-start gap-3 md:gap-4 rounded-lg border border-gray-100 bg-white p-3 md:p-4 transition-all hover:bg-[#FEF2F2]/30 hover:shadow-sm hover:border-[#991B1B]/20"
                                             >
 
                                                 <div className="flex-1 min-w-0">
@@ -320,7 +326,7 @@ const UserDashboard = () => {
                     {/* Right Column: Overview */}
                     <div className="space-y-6">
                         <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-                            <div className="p-6">
+                            <div className="p-4 md:p-6">
                                 <div className="space-y-6">
                                     <div className="flex items-center gap-4">
                                         <div className="flex-1">
@@ -347,7 +353,7 @@ const UserDashboard = () => {
 
                                     <div className="pt-6 border-t border-gray-100">
                                         <h4 className="text-sm font-medium text-gray-900 mb-4">Quick Stats</h4>
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-2 gap-3 md:gap-4">
                                             <div className="p-3 bg-gray-50 rounded-lg">
                                                 <p className="text-xs text-gray-500">Pending</p>
                                                 <p className="text-lg font-bold text-gray-900 mt-1">{stats.pending}</p>
@@ -371,8 +377,16 @@ const UserDashboard = () => {
                     onClose={() => setStatModal({ ...statModal, isOpen: false })}
                     title={statModal.title}
                     tasks={tasks.filter(t => {
-                        if (statModal.type === 'all') return true;
-                        return t.derivedStatus === statModal.type;
+                        const todayStr = new Date().toLocaleDateString('en-CA');
+                        const isTillToday = t.task_start_date && t.task_start_date.substring(0, 10) <= todayStr;
+                        const isToday = t.task_start_date && t.task_start_date.substring(0, 10) === todayStr;
+
+                        if (statModal.type === 'all') return isTillToday;
+                        if (statModal.type === 'pending') return isToday && t.derivedStatus === 'pending';
+
+                        // For overdue and completed, we already filter by status, 
+                        // but we must also ensure they are from the "till today" set
+                        return isTillToday && t.derivedStatus === statModal.type;
                     })}
                 />
             )}
@@ -437,21 +451,21 @@ const StatCard = ({ title, value, description, icon, accentColor = "gray", alert
     return (
         <div
             onClick={onClick}
-            className={`group relative overflow-hidden rounded-xl border p-6 transition-all hover:shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${style.border} ${style.bg}`}
+            className={`group relative overflow-hidden rounded-xl border p-4 md:p-6 transition-all hover:shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${style.border} ${style.bg}`}
         >
             <div className="flex items-center justify-between">
-                <div className={`rounded-lg p-2 ${style.iconBg}`}>
-                    {icon && <div className="h-5 w-5">{icon}</div>}
+                <div className={`rounded-lg p-1.5 md:p-2 ${style.iconBg}`}>
+                    {icon && <div className="h-4 w-4 md:h-5 md:w-5">{icon}</div>}
                 </div>
             </div>
-            <div className="mt-4">
-                <h3 className={`text-sm font-medium ${style.subtext}`}>{title}</h3>
-                <div className="mt-2 flex items-baseline gap-2">
-                    <span className={`text-3xl font-bold tracking-tight ${style.text}`}>
+            <div className="mt-3 md:mt-4">
+                <h3 className={`text-[10px] md:text-sm font-medium uppercase tracking-wide md:normal-case ${style.subtext}`}>{title}</h3>
+                <div className="mt-1 md:mt-2 flex items-baseline gap-2">
+                    <span className={`text-xl md:text-3xl font-bold tracking-tight ${style.text}`}>
                         {value}
                     </span>
                 </div>
-                <p className={`mt-1 text-xs ${style.subtext}`}>{description}</p>
+                <p className={`mt-0.5 md:mt-1 text-[10px] md:text-xs line-clamp-1 ${style.subtext}`}>{description}</p>
             </div>
         </div>
     )

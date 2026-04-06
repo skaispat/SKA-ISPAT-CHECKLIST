@@ -7,12 +7,14 @@ import Toast from "../../components/Toast"
 const AVAILABLE_PAGES = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'tasks', label: 'My Tasks' },
-    { id: 'completed_tasks', label: 'Completed Tasks' },
     { id: 'assign_task', label: 'Assign Task' },
-    { id: 'profile', label: 'Profile' },
+    { id: 'admin_approval', label: 'Admin Approval' },
+    { id: 'delegated_tasks', label: 'Delegated Tasks' },
+    { id: 'data_pages', label: 'Department / Data Pages' },
+    { id: 'profile', label: 'My Profile' },
+    { id: 'settings', label: 'Settings' },
     { id: 'license', label: 'License' },
-    { id: 'training', label: 'Training Video' },
-    { id: 'data', label: 'Data Pages' }
+    { id: 'training', label: 'Training Video' }
 ]
 
 export default function Settings() {
@@ -42,23 +44,9 @@ export default function Settings() {
         user_access: []
     })
 
-    // Profile State (For non-admin or self-update)
-    const [profileData, setProfileData] = useState({
-        username: "",
-        password: "",
-        full_name: "",
-        department: "",
-        mobile_number: ""
-    })
-
     useEffect(() => {
         const role = sessionStorage.getItem("role")
-        const username = sessionStorage.getItem("username")
         setUserRole(role)
-
-        if (username) {
-            fetchUserProfile(username)
-        }
 
         if (role === 'admin') {
             fetchUsers()
@@ -78,29 +66,6 @@ export default function Settings() {
             setDepartments(data || [])
         } catch (error) {
             console.error("Error fetching departments:", error)
-        }
-    }
-
-    const fetchUserProfile = async (username) => {
-        try {
-            const { data, error } = await supabase
-                .from('users')
-                .select('*')
-                .eq('username', username)
-                .single()
-
-            if (error) throw error
-
-            setProfileData({
-                username: data.username,
-                password: data.password,
-                full_name: data.full_name || "",
-                department: data.department || "",
-                mobile_number: data.mobile_number || ""
-            })
-
-        } catch (error) {
-            console.error("Error fetching profile:", error)
         }
     }
 
@@ -147,7 +112,9 @@ export default function Settings() {
             full_name: user.full_name || "",
             dept_id: user.dept_id,
             mobile_number: user.mobile_number || "",
-            user_access: user.user_access ? user.user_access.split(',') : []
+            user_access: user.user_access === 'all'
+                ? AVAILABLE_PAGES.map(p => p.id)
+                : (user.user_access ? user.user_access.split(',') : [])
         })
         setIsEditing(true)
         setShowUserForm(true)
@@ -212,7 +179,9 @@ export default function Settings() {
                 throw new Error("Mobile number must be exactly 10 digits")
             }
 
-            const userAccessString = formData.role === 'admin' ? 'all' : (formData.user_access || []).join(',')
+            const userAccessString = (formData.user_access?.length === AVAILABLE_PAGES.length)
+                ? 'all'
+                : (formData.user_access || []).join(',')
 
             if (isEditing) {
                 // Update existing user
@@ -257,31 +226,6 @@ export default function Settings() {
         }
     }
 
-    const handleSelfUpdate = async (e) => {
-        e.preventDefault()
-        setLoading(true)
-        setMessage({ type: "", text: "" })
-
-        try {
-            const { error } = await supabase
-                .from('users')
-                .update({
-                    password: profileData.password,
-                    full_name: profileData.full_name,
-                    mobile_number: profileData.mobile_number
-                })
-                .eq('username', sessionStorage.getItem("username"))
-
-            if (error) throw error
-
-            setMessage({ type: "success", text: "Profile updated successfully!" })
-        } catch (error) {
-            setMessage({ type: "error", text: error.message })
-        } finally {
-            setLoading(false)
-        }
-    }
-
     const filteredUsers = users.filter(user => {
         if (!searchQuery) return true
         const query = searchQuery.toLowerCase()
@@ -296,12 +240,12 @@ export default function Settings() {
         <AdminLayout>
             <div className="max-w-6xl mx-auto space-y-8 p-4 md:p-8 animate-in fade-in duration-500">
                 {/* Header */}
-                <div className="flex flex-col gap-1">
-                    <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Settings</h1>
+                {/* <div className="flex flex-col gap-1">
+                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Admin Settings</h1>
                     <p className="text-gray-500">
-                        {userRole === 'admin' ? "Manage system users and permissions." : "Manage your personal profile."}
+                        Manage system users, departments, and permissions.
                     </p>
-                </div>
+                </div> */}
 
 
                 {/* User Management Section (Admin Only) */}
@@ -309,10 +253,10 @@ export default function Settings() {
                     <div className="space-y-6">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                             <div>
-                                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                                    User Management
+                                <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                                    Admin Settings
                                 </h2>
-                                <p className="text-sm text-gray-500 mt-1">View and manage system users and permissions.</p>
+                                <p className="text-md text-gray-500 mt-1">Manage system users, departments, and permissions.</p>
                             </div>
                             <button
                                 onClick={() => {
@@ -467,16 +411,25 @@ export default function Settings() {
                                         <div className="space-y-3 pt-2 border-t border-gray-50">
                                             <div className="flex justify-between items-center">
                                                 <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">User Access Permissions</label>
-                                                {formData.role === 'admin' && (
-                                                    <span className="text-[10px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
-                                                        ADMIN: ALL ACCESS
-                                                    </span>
-                                                )}
                                             </div>
-
-                                            {formData.role === 'user' ? (
+                                            <div className="space-y-3">
+                                                <div className="flex gap-2 text-[10px]">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, user_access: AVAILABLE_PAGES.map(p => p.id) })}
+                                                        className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-600 font-medium transition-colors"
+                                                    >
+                                                        Select All
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, user_access: [] })}
+                                                        className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-gray-600 font-medium transition-colors"
+                                                    >
+                                                        Select None
+                                                    </button>
+                                                </div>
                                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-
                                                     {AVAILABLE_PAGES.map((page) => (
                                                         <label key={page.id} className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
                                                             <div className="relative flex items-center">
@@ -500,11 +453,7 @@ export default function Settings() {
                                                         </label>
                                                     ))}
                                                 </div>
-                                            ) : (
-                                                <div className="p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-500 italic text-center">
-                                                    Administrator accounts have default access to all system pages.
-                                                </div>
-                                            )}
+                                            </div>
                                         </div>
 
                                         <div className="pt-4 md:pt-6 flex flex-col-reverse sm:flex-row justify-end gap-3 border-t border-gray-100">
@@ -708,112 +657,7 @@ export default function Settings() {
                     </div>
                 )}
 
-                {/* Profile Section (Non-Admin Only) */}
-                {userRole !== "admin" && (
-                    <div className="pt-4">
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                            <div className="px-8 py-6 border-b border-gray-50">
-                                <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                    Profile Settings
-                                </h2>
-                                <p className="text-sm text-gray-500 mt-1">Update your personal information and password.</p>
-                            </div>
-
-                            <form onSubmit={handleSelfUpdate} className="p-5 md:p-8 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Username</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    disabled
-                                                    className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-500 text-sm"
-                                                    value={profileData.username}
-                                                />
-                                                <Lock className="absolute right-3 top-2.5 text-gray-400 opacity-50" size={16} />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Full Name <span className="text-red-500">*</span></label>
-                                            <input
-                                                type="text"
-                                                required
-                                                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#991B1B]/10 focus:border-[#991B1B] outline-none transition-all text-sm"
-                                                value={profileData.full_name}
-                                                onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
-                                            />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Mobile Number <span className="text-red-500">*</span></label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    required
-                                                    maxLength="10"
-                                                    placeholder="10-digit number"
-                                                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#991B1B]/10 focus:border-[#991B1B] outline-none transition-all text-sm"
-                                                    value={profileData.mobile_number}
-                                                    onChange={(e) => setProfileData({ ...profileData, mobile_number: e.target.value.replace(/\D/g, '') })}
-                                                />
-                                                <Phone className="absolute left-3 top-3 text-gray-400" size={16} />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">New Password</label>
-                                            <div className="relative">
-                                                <input
-                                                    type={showPassword ? "text" : "password"}
-                                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#991B1B]/10 focus:border-[#991B1B] outline-none transition-all text-sm pr-10"
-                                                    value={profileData.password}
-                                                    onChange={(e) => setProfileData({ ...profileData, password: e.target.value })}
-                                                    placeholder="Enter new password to update"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 transition-colors"
-                                                    onClick={() => setShowPassword(!showPassword)}
-                                                >
-                                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-xs font-semibold uppercase tracking-wide text-gray-500">Department</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    disabled
-                                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-gray-500 text-sm"
-                                                    value={profileData.department}
-                                                />
-                                                <Lock className="absolute right-3 top-2.5 text-gray-400 opacity-50" size={16} />
-                                            </div>
-                                            <p className="text-[10px] text-gray-400 mt-1.5 uppercase font-medium">Managed by admin</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="pt-6 border-t border-gray-50 flex justify-end">
-                                    <button
-                                        type="submit"
-                                        disabled={loading}
-                                        className="w-full sm:w-auto px-8 py-2.5 bg-[#991B1B] text-white rounded-xl hover:bg-[#7f1616] transition-all disabled:opacity-50 flex items-center justify-center gap-2 font-medium text-sm shadow-md hover:shadow-lg transform active:scale-95"
-                                    >
-                                        <Save size={16} />
-                                        {loading ? "Saving..." : "Save Changes"}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
+                {/* List */}
                 {/* Custom Confirmation Modal */}
                 {toggleModal.show && toggleModal.user && (
                     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">

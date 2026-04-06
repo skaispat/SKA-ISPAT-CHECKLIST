@@ -53,10 +53,8 @@ const LoginPage = () => {
         sessionStorage.setItem('role', user.role)
         sessionStorage.setItem('department', user.department || '')
 
-        // Store Permissions
-        const accessRights = user.role === 'admin'
-          ? 'all'
-          : (user.user_access || '')
+        // Store Permissions: Use user_access if present, fallback to 'all' for admins
+        const accessRights = user.user_access || (user.role === 'admin' ? 'all' : '')
         sessionStorage.setItem('user_access', accessRights)
 
         showToast(`Login successful. Welcome, ${user.full_name || user.username}!`, "success")

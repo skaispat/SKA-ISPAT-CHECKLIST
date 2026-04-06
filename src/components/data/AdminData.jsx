@@ -24,7 +24,7 @@ import {
 
 import AdminLayout from "../layout/AdminLayout"
 
-export default function HouseKeepingData() {
+export default function AdminData() {
     const todayStr = new Date().toLocaleDateString('en-CA')
     const [tasks, setTasks] = useState([])
     const [loading, setLoading] = useState(true)
@@ -57,6 +57,7 @@ export default function HouseKeepingData() {
     useEffect(() => {
         setSelectedRows(new Set())
         setCurrentPage(1)
+        setVisibleItemsInBuffer(25)
     }, [activeTab, searchTerm, historyFilterName, historyStartDate, historyEndDate, pendingFilterName, pendingStartDate, pendingEndDate])
 
     useEffect(() => {
@@ -86,13 +87,13 @@ export default function HouseKeepingData() {
             const { data: deptData, error: deptError } = await supabase
                 .from('departments')
                 .select('dept_name')
-                .ilike('dept_name', 'housekeeping')
+                .ilike('dept_name', 'ADMIN')
                 .single()
 
             if (deptError) throw deptError
 
             if (!deptData) {
-                console.error("HouseKeeping department not found")
+                console.error("Admin department not found")
                 setLoading(false)
                 return
             }
@@ -189,13 +190,6 @@ export default function HouseKeepingData() {
             return;
         }
 
-        // Check for required Doer Name
-        const missingDoers = tasksToSubmit.filter(t => !t.doers_name);
-        if (missingDoers.length > 0) {
-            alert(`Please select a Doer Name for all selected tasks.`);
-            return;
-        }
-
         setIsBatchConfirmOpen(true)
     }
 
@@ -209,15 +203,11 @@ export default function HouseKeepingData() {
                 // If batchRemarks provided, use it. Otherwise fall back to inline task.remarks
                 const finalRemarks = batchRemarks ? batchRemarks : task.remarks
 
-                const username = sessionStorage.getItem("username") || "unknown"
-
                 const updateData = {
                     status: 'pending_approval',
                     remarks: finalRemarks,
                     uploaded_image: task.uploaded_image,
-                    actual: new Date().toISOString().split('T')[0], // Extract only YYYY-MM-DD
-                    doers_name: [task.doers_name], // Wrap in array as database type is text[]
-                    submitter_name: [username]   // Wrap in array as database type is text[]
+                    actual: new Date().toISOString()
                 }
 
                 return supabase.from('master_tasks').update(updateData).eq('task_id', taskId)
@@ -347,22 +337,26 @@ export default function HouseKeepingData() {
         return 0
     })
 
-    // Pagination logic
-    const handleScroll = (e) => {
-        const { scrollTop, scrollHeight, clientHeight } = e.target
-        if (scrollTop + clientHeight >= scrollHeight - 50) {
-            setVisibleItemsInBuffer(prev => {
-                const newVisible = prev + 50
-                return Math.min(newVisible, filteredTasks.length)
-            })
-        }
-    }
-
+    // Hybrid Pagination + Infinite Scroll logic
     const indexOfLastItem = currentPage * itemsPerPage
     const indexOfFirstItem = indexOfLastItem - itemsPerPage
-    const paginatedItems = filteredTasks.slice(indexOfFirstItem, indexOfLastItem)
-    const currentItems = paginatedItems.slice(0, visibleItemsInBuffer)
+
+    // Within the current page of 250, only show visibleItemsInBuffer (starting at 9)
+    const currentItems = filteredTasks
+        .slice(indexOfFirstItem, indexOfLastItem)
+        .slice(0, visibleItemsInBuffer)
+
     const totalPages = Math.ceil(filteredTasks.length / itemsPerPage)
+
+    const handleScroll = (e) => {
+        const { scrollTop, scrollHeight, clientHeight } = e.target
+        // Load more within the current 250 items buffer
+        if (scrollHeight - scrollTop <= clientHeight + 50) {
+            if (visibleItemsInBuffer < itemsPerPage && visibleItemsInBuffer < (filteredTasks.length - indexOfFirstItem)) {
+                setVisibleItemsInBuffer(prev => prev + 25)
+            }
+        }
+    }
 
     const toggleSelectAll = () => {
         const allOnPageSelected = currentItems.length > 0 && currentItems.every(t => selectedRows.has(t.task_id))
@@ -410,7 +404,7 @@ export default function HouseKeepingData() {
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row gap-6 justify-between items-start sm:items-center pb-6">
                     <div>
-                        <h1 className="text-2xl font-semibold tracking-tight text-foreground">HouseKeeping Records</h1>
+                        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Admin Records</h1>
                     </div>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         {isAdmin && (
@@ -457,7 +451,6 @@ export default function HouseKeepingData() {
                     </div>
                 </div>
 
-                {/* Tabs and Filters */}
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pt-2">
                     <div className="flex items-center gap-1 p-1 bg-muted/30 rounded-lg w-fit shrink-0">
                         <button
@@ -506,7 +499,7 @@ export default function HouseKeepingData() {
 
                     {/* Pending (Today & Overdue) Filters */}
                     {(activeTab === 'today' || activeTab === 'overdue') && (
-                        <div className={`grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2 ${showMobileFilters ? 'grid' : 'hidden sm:flex'}`}>
+                        <div className={`flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2 ${showMobileFilters ? 'flex' : 'hidden sm:flex'}`}>
                             {isAdmin && (
                                 <div className="flex flex-col gap-1 w-full sm:w-auto">
                                     <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
@@ -528,7 +521,7 @@ export default function HouseKeepingData() {
                                     type="date"
                                     value={pendingStartDate}
                                     onChange={(e) => setPendingStartDate(e.target.value)}
-                                    className="h-9 px-3 w-full text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                    className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
                                 />
                             </div>
                             <div className="flex flex-col gap-1 w-full sm:w-auto">
@@ -538,7 +531,7 @@ export default function HouseKeepingData() {
                                     min={pendingStartDate}
                                     value={pendingEndDate}
                                     onChange={(e) => setPendingEndDate(e.target.value)}
-                                    className="h-9 px-3 w-full text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                    className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
                                 />
                             </div>
                             {(pendingFilterName || pendingStartDate || pendingEndDate) && (
@@ -548,7 +541,7 @@ export default function HouseKeepingData() {
                                         setPendingStartDate("")
                                         setPendingEndDate("")
                                     }}
-                                    className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors col-span-2 sm:col-span-1"
+                                    className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                                 >
                                     Clear
                                 </button>
@@ -558,7 +551,7 @@ export default function HouseKeepingData() {
 
                     {/* History Filters */}
                     {activeTab === 'history' && (
-                        <div className={`grid grid-cols-2 sm:flex sm:flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2 ${showMobileFilters ? 'grid' : 'hidden sm:flex'}`}>
+                        <div className={`flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2 ${showMobileFilters ? 'flex' : 'hidden sm:flex'}`}>
                             {isAdmin && (
                                 <div className="flex flex-col gap-1 w-full sm:w-auto">
                                     <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider ml-1">Filter by Name</label>
@@ -580,7 +573,7 @@ export default function HouseKeepingData() {
                                     type="date"
                                     value={historyStartDate}
                                     onChange={(e) => setHistoryStartDate(e.target.value)}
-                                    className="h-9 px-3 w-full text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                    className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
                                 />
                             </div>
                             <div className="flex flex-col gap-1 w-full sm:w-auto">
@@ -590,7 +583,7 @@ export default function HouseKeepingData() {
                                     min={historyStartDate}
                                     value={historyEndDate}
                                     onChange={(e) => setHistoryEndDate(e.target.value)}
-                                    className="h-9 px-3 w-full text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
+                                    className="h-9 px-3 text-sm bg-transparent border border-border/50 hover:border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
                                 />
                             </div>
                             {(historyFilterName || historyStartDate || historyEndDate) && (
@@ -600,7 +593,7 @@ export default function HouseKeepingData() {
                                         setHistoryStartDate("")
                                         setHistoryEndDate("")
                                     }}
-                                    className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors col-span-2 sm:col-span-1"
+                                    className="h-9 px-4 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors"
                                 >
                                     Clear
                                 </button>
@@ -610,9 +603,13 @@ export default function HouseKeepingData() {
                 </div>
 
                 {/* Table Container */}
-                <div ref={scrollContainerRef} onScroll={handleScroll} className="border border-border/50 rounded-xl overflow-hidden bg-card/50 shadow-sm backdrop-blur-[2px] max-h-[580px] overflow-y-scroll">
+                <div className="border border-border/50 rounded-xl overflow-hidden bg-card/50 shadow-sm backdrop-blur-[2px]">
                     {/* Desktop Table View */}
-                    <div className="hidden md:block overflow-x-auto">
+                    <div
+                        ref={scrollContainerRef}
+                        onScroll={handleScroll}
+                        className="hidden md:block overflow-y-scroll overflow-x-auto max-h-[580px]"
+                    >
                         <table className="w-full text-sm text-left border-collapse">
                             <thead className="bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                                 <tr>
@@ -634,10 +631,6 @@ export default function HouseKeepingData() {
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Department</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Given By</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Name</th>
-                                    <th className="px-4 py-3 whitespace-nowrap font-medium">Location</th>
-                                    {activeTab === 'history' && <th className="px-4 py-3 whitespace-nowrap font-medium">Doer Name</th>}
-                                    {activeTab === 'history' && <th className="px-4 py-3 whitespace-nowrap font-medium">Submitter</th>}
-                                    {activeTab !== 'history' && <th className="px-4 py-3 whitespace-nowrap min-w-[150px] font-medium">Doer Name</th>}
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[450px] font-medium">Task Title</th>
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[500px] font-medium">Task Description</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Freq</th>
@@ -694,38 +687,6 @@ export default function HouseKeepingData() {
                                             <td className="px-4 py-3 text-muted-foreground">{task.department}</td>
                                             <td className="px-4 py-3 text-muted-foreground">{task.given_by_username}</td>
                                             <td className="px-4 py-3 text-muted-foreground font-medium">{task.name}</td>
-                                            <td className="px-4 py-3 text-muted-foreground whitespace-nowrap font-medium">
-                                                {Array.isArray(task.location) ? task.location.join(', ') : (task.location || '-')}
-                                            </td>
-                                            {activeTab === 'history' && (
-                                                <>
-                                                    <td className="px-4 py-3 text-muted-foreground">
-                                                        {Array.isArray(task.doers_name) ? task.doers_name.join(', ') : (task.doers_name || '-')}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-muted-foreground">
-                                                        {Array.isArray(task.submitter_name) ? task.submitter_name.join(', ') : (task.submitter_name || '-')}
-                                                    </td>
-                                                </>
-                                            )}
-                                            {activeTab !== 'history' && (
-                                                <td className="px-4 py-3">
-                                                    <select
-                                                        disabled={!selectedRows.has(task.task_id)}
-                                                        value={Array.isArray(task.doers_name) ? task.doers_name[0] : (task.doers_name || '')}
-                                                        onChange={(e) => handleLocalUpdate(task.task_id, { doers_name: e.target.value })}
-                                                        required
-                                                        className={`block w-full px-2 py-1.5 text-xs font-semibold rounded-md border-0 bg-transparent ring-1 ring-inset ring-primary/20 focus:ring-2 focus:ring-inset focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed`}
-                                                    >
-                                                        <option value="">Select Doer</option>
-                                                        <option value="Laxmi Bai">Laxmi Bai</option>
-                                                        <option value="Murgan Bai">Murgan Bai</option>
-                                                        <option value="Gangotri Bai">Gangotri Bai</option>
-                                                        <option value="Lalita bai">Lalita bai</option>
-                                                        <option value="Karman Bai">Karman Bai</option>
-                                                        <option value="Contractor Labour">Contractor Labour</option>
-                                                    </select>
-                                                </td>
-                                            )}
                                             <td className="px-4 py-3 font-medium text-foreground">
                                                 <div title={task.task_title} className="line-clamp-2">
                                                     {task.task_title}
@@ -790,7 +751,7 @@ export default function HouseKeepingData() {
                                                         </a>
                                                     )}
                                                     {activeTab === 'history' ? (
-                                                        null
+                                                        null // Hide upload in history
                                                     ) : task.isUploading ? (
                                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                             <Loader2 className="h-3 w-3 animate-spin" />
@@ -803,7 +764,7 @@ export default function HouseKeepingData() {
                                                                 className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                                                             >
                                                                 <Upload className="h-3 w-3" />
-                                                                <span>{task.uploaded_image ? 'Change' : 'Upload'}</span>
+                                                                <span>{task.uploaded_image ? "Change" : "Upload"}</span>
                                                             </button>
                                                             <input
                                                                 disabled={!selectedRows.has(task.task_id)}
@@ -871,10 +832,6 @@ export default function HouseKeepingData() {
                                             <span className="font-medium text-foreground">{formatDate(task.task_start_date)}</span>
                                         </div>
                                         <div className="flex items-center gap-1.5">
-                                            <span>Location:</span>
-                                            <span className="font-medium text-foreground">{Array.isArray(task.location) ? task.location.join(', ') : (task.location || '-')}</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
                                             <span>Name:</span>
                                             <span className="font-medium text-foreground">{task.name}</span>
                                         </div>
@@ -883,26 +840,6 @@ export default function HouseKeepingData() {
                                             <span className="font-medium text-foreground truncate">{task.given_by_username}</span>
                                         </div>
                                     </div>
-
-                                    {activeTab !== 'history' && (
-                                        <div className="pt-2">
-                                            <label className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider mb-1 block">Doer Name</label>
-                                            <select
-                                                disabled={!selectedRows.has(task.task_id)}
-                                                value={Array.isArray(task.doers_name) ? task.doers_name[0] : (task.doers_name || '')}
-                                                onChange={(e) => handleLocalUpdate(task.task_id, { doers_name: e.target.value })}
-                                                className={`block w-full px-2 py-2 text-xs font-semibold rounded-md border-0 bg-background ring-1 ring-inset ring-primary/20 focus:ring-2 focus:ring-inset focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed`}
-                                            >
-                                                <option value="">Select Doer</option>
-                                                <option value="Laxmi Bai">Laxmi Bai</option>
-                                                <option value="Murgan Bai">Murgan Bai</option>
-                                                <option value="Gangotri Bai">Gangotri Bai</option>
-                                                <option value="Lalita bai">Lalita bai</option>
-                                                <option value="Karman Bai">Karman Bai</option>
-                                                <option value="Contractor Labour">Contractor Labour</option>
-                                            </select>
-                                        </div>
-                                    )}
 
                                     {activeTab !== 'history' && (
                                         <div className="pt-2 flex items-center gap-3 border-t border-border/30">
@@ -962,7 +899,7 @@ export default function HouseKeepingData() {
                                                         className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                                                     >
                                                         <Upload className="h-3 w-3" />
-                                                        {task.uploaded_image ? 'Change' : 'Upload'}
+                                                        {task.uploaded_image ? "Change" : "Upload"}
                                                     </button>
                                                     <input
                                                         disabled={!selectedRows.has(task.task_id)}
@@ -1034,7 +971,6 @@ export default function HouseKeepingData() {
                         </div>
                     </div>
                 )}
-
                 {/* View History Modal */}
                 {isHistoryOpen && selectedTask && (
                     <HistoryModal
@@ -1156,23 +1092,21 @@ function HistoryModal({ task, onClose }) {
                     <table className="w-full text-sm text-left border-collapse">
                         <thead className="bg-muted/30 border-b border-border/50 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold sticky top-0 backdrop-blur-sm">
                             <tr>
-                                <th className="px-4 py-3 font-medium text-left">Date</th>
-                                <th className="px-4 py-3 font-medium text-left">Assigned</th>
-                                <th className="px-4 py-3 font-medium text-left">Doer Name</th>
-                                <th className="px-4 py-3 font-medium text-left">Submitter</th>
-                                <th className="px-4 py-3 font-medium text-center">Status</th>
-                                <th className="px-4 py-3 font-medium text-left">Remarks</th>
-                                <th className="px-4 py-3 font-medium text-left">Actual Time</th>
+                                <th className="px-4 py-3 font-medium">Date</th>
+                                <th className="px-4 py-3 font-medium">User</th>
+                                <th className="px-4 py-3 font-medium">Status</th>
+                                <th className="px-4 py-3 font-medium">Remarks</th>
+                                <th className="px-4 py-3 font-medium">Actual Time</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border/30">
                             {loading ? (
-                                <tr><td colSpan="7" className="p-8 text-center text-muted-foreground animate-pulse">Loading history...</td></tr>
+                                <tr><td colSpan="5" className="p-8 text-center text-muted-foreground">Loading history...</td></tr>
                             ) : filteredHistory.length === 0 ? (
-                                <tr><td colSpan="7" className="p-8 text-center text-muted-foreground">No history records found.</td></tr>
+                                <tr><td colSpan="5" className="p-8 text-center text-muted-foreground">No history records found.</td></tr>
                             ) : (
                                 filteredHistory.map(item => (
-                                    <tr key={item.task_id} className="hover:bg-muted/20 transition-all duration-200">
+                                    <tr key={item.task_id} className="hover:bg-muted/20 transition-colors">
                                         <td className="px-4 py-3 whitespace-nowrap">
                                             <span className="font-medium">
                                                 {(() => {
@@ -1184,15 +1118,9 @@ function HistoryModal({ task, onClose }) {
                                                 {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                         </td>
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <div className="font-medium text-foreground">{item.given_by_username}</div>
-                                            {item.name && <div className="text-muted-foreground text-[10px]">Assignee: {item.name}</div>}
-                                        </td>
-                                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                                            {Array.isArray(item.doers_name) ? item.doers_name.join(', ') : (item.doers_name || '-')}
-                                        </td>
-                                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-primary font-medium">
-                                            {Array.isArray(item.submitter_name) ? item.submitter_name.join(', ') : (item.submitter_name || '-')}
+                                        <td className="px-4 py-3">
+                                            <span className="font-medium text-foreground">{item.given_by_username}</span>
+                                            {item.name && <span className="text-muted-foreground text-xs ml-1">({item.name})</span>}
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${item.status === 'Yes' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -1506,7 +1434,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
 
         setIsSubmitting(true)
         try {
-            const department = tasks[0]?.department || 'HouseKeeping'
+            const department = tasks[0]?.department || 'ACCOUNTS'
 
             const { data, error } = await supabase
                 .from('master_tasks')
@@ -1537,7 +1465,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
 
     // Filter tasks that will be deleted based on current selection
     const tasksToDelete = selectedTitle
-        ? tasks.filter(t => t.task_title === selectedTitle && t.department === (tasks[0]?.department || 'HouseKeeping'))
+        ? tasks.filter(t => t.task_title === selectedTitle && t.department === (tasks[0]?.department || 'ACCOUNTS'))
         : []
 
     const handleDeleteClick = () => {
@@ -1547,7 +1475,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
     const confirmDelete = async () => {
         setIsSubmitting(true)
         try {
-            const department = tasks[0]?.department || 'HouseKeeping'
+            const department = tasks[0]?.department || 'ACCOUNTS'
 
             const { error } = await supabase
                 .from('master_tasks')

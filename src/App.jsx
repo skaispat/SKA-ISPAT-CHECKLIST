@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from "react-router-dom"
 import { supabase } from "./supabase"
@@ -12,6 +10,8 @@ import "./index.css"
 import License from "./pages/License"
 import TrainingVideo from "./pages/TrainingVideo"
 import Settings from "./pages/admin/Settings"
+import Profile from "./pages/admin/Profile"
+import DelegatedTask from "./pages/user/DelegatedTask"
 import UserDashboard from "./pages/user/Dashboard"
 import UserTasks from "./pages/user/Tasks"
 import CalendarPage from "./pages/CalendarPage"
@@ -19,14 +19,12 @@ import CalendarPage from "./pages/CalendarPage"
 import HouseKeepingData from "./components/data/HouseKeepingData"
 import StoreData from "./components/data/StoreData"
 import AccountData from "./components/data/AccountData"
+import AdminData from "./components/data/AdminData"
 import SecurityData from "./components/data/SecurityData"
 import SlagCrusherData from "./components/data/SlagCrusherData"
 import HRData from "./components/data/HRData"
 import MGMTData from "./components/data/MGMTData"
 import HealthAndSafetyData from "./components/data/HealthAndSafetyData"
-
-
-
 
 // Component to redirect to appropriate dashboard based on role
 const DashboardRedirect = () => {
@@ -50,7 +48,6 @@ const ProtectedRoute = ({ children, allowedRoles = [], requiredPermission = null
       }
 
       try {
-        // Fetch latest user data
         const { data: user, error } = await supabase
           .from('users')
           .select('role, user_access, status')
@@ -59,8 +56,6 @@ const ProtectedRoute = ({ children, allowedRoles = [], requiredPermission = null
 
         if (error || !user) {
           console.error("Error verifying user:", error)
-          // If error (or user deleted), potentially deny access or rely on session?
-          // Safest is to deny if we can't verify.
           setLoading(false)
           return
         }
@@ -71,20 +66,15 @@ const ProtectedRoute = ({ children, allowedRoles = [], requiredPermission = null
           return
         }
 
-        // Update local session storage to match DB
-        const accessRights = user.role === 'admin' ? 'all' : (user.user_access || '')
+        const accessRights = user.user_access || (user.role === 'admin' ? 'all' : '')
         sessionStorage.setItem('role', user.role)
         sessionStorage.setItem('user_access', accessRights)
 
-        // Check Permissions
         let authorized = true
-
-        // Role check
         if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
           authorized = false
         }
 
-        // Permission check
         if (requiredPermission && user.role !== 'admin') {
           const permissions = accessRights ? accessRights.split(',') : []
           if (!permissions.includes(requiredPermission)) {
@@ -144,20 +134,13 @@ const ProtectedRoute = ({ children, allowedRoles = [], requiredPermission = null
 }
 
 function App() {
-
   return (
     <Router>
       <Routes>
-        {/* Root redirect */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-
-        {/* Login route */}
         <Route path="/login" element={<LoginPage />} />
-
-        {/* Dashboard redirect - redirects to appropriate dashboard based on role */}
         <Route path="/dashboard" element={<DashboardRedirect />} />
-
-        {/* Admin Dashboard route */}
+        
         <Route
           path="/dashboard/admin"
           element={
@@ -167,7 +150,6 @@ function App() {
           }
         />
 
-        {/* User Dashboard route */}
         <Route
           path="/dashboard/user"
           element={
@@ -177,7 +159,6 @@ function App() {
           }
         />
 
-        {/* User Tasks route */}
         <Route
           path="/dashboard/user/tasks"
           element={
@@ -187,9 +168,6 @@ function App() {
           }
         />
 
-
-
-        {/* HouseKeeping Data Route */}
         <Route
           path="/dashboard/data/housekeeping"
           element={
@@ -199,7 +177,6 @@ function App() {
           }
         />
 
-        {/* Store Data Route */}
         <Route
           path="/dashboard/data/store"
           element={
@@ -209,7 +186,6 @@ function App() {
           }
         />
 
-        {/* Account Data Route */}
         <Route
           path="/dashboard/data/account"
           element={
@@ -218,8 +194,15 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/dashboard/data/admin"
+          element={
+            <ProtectedRoute requiredPermission="dashboard">
+              <AdminData />
+            </ProtectedRoute>
+          }
+        />
 
-        {/* Security Data Route */}
         <Route
           path="/dashboard/data/security"
           element={
@@ -229,7 +212,6 @@ function App() {
           }
         />
 
-        {/* Slag Crusher Data Route */}
         <Route
           path="/dashboard/data/slag-crusher"
           element={
@@ -239,7 +221,6 @@ function App() {
           }
         />
 
-        {/* HR Data Route */}
         <Route
           path="/dashboard/data/hr"
           element={
@@ -249,7 +230,6 @@ function App() {
           }
         />
 
-        {/* MGMT Data Route */}
         <Route
           path="/dashboard/data/mgmt"
           element={
@@ -259,7 +239,6 @@ function App() {
           }
         />
 
-        {/* Health and Safety Data Route */}
         <Route
           path="/dashboard/data/health-and-safety"
           element={
@@ -269,11 +248,6 @@ function App() {
           }
         />
 
-
-
-
-
-        {/* Assign Task route */}
         <Route
           path="/dashboard/assign-task"
           element={
@@ -283,7 +257,6 @@ function App() {
           }
         />
 
-        {/* Admin Approval route */}
         <Route
           path="/dashboard/admin/approval"
           element={
@@ -292,7 +265,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
 
         <Route
           path="/dashboard/license"
@@ -313,9 +285,27 @@ function App() {
         />
 
         <Route
-          path="/dashboard/settings"
+          path="/dashboard/profile"
           element={
             <ProtectedRoute requiredPermission="profile">
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dashboard/delegated-tasks"
+          element={
+            <ProtectedRoute requiredPermission="delegated_tasks">
+              <DelegatedTask />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dashboard/settings"
+          element={
+            <ProtectedRoute requiredPermission="settings">
               <Settings />
             </ProtectedRoute>
           }
@@ -330,13 +320,9 @@ function App() {
           }
         />
 
-
-
-        {/* Backward compatibility redirects */}
         <Route path="/admin/*" element={<Navigate to="/dashboard/admin" replace />} />
         <Route path="/admin/dashboard" element={<Navigate to="/dashboard/admin" replace />} />
         <Route path="/admin/assign-task" element={<Navigate to="/dashboard/assign-task" replace />} />
-
         <Route path="/admin/license" element={<Navigate to="/dashboard/license" replace />} />
         <Route path="/admin/traning-video" element={<Navigate to="/dashboard/traning-video" replace />} />
         <Route path="/user/*" element={<Navigate to="/dashboard/admin" replace />} />

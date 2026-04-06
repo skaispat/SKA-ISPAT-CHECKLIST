@@ -404,7 +404,7 @@ export default function AccountData() {
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row gap-6 justify-between items-start sm:items-center pb-6">
                     <div>
-                        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Account Records</h1>
+                        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Account Records</h1>
                     </div>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         {isAdmin && (
@@ -462,7 +462,7 @@ export default function AccountData() {
                         >
                             Today's Tasks
                             {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && (t.task_start_date?.substring(0, 10) === todayStr || !t.task_start_date)).length > 0 && (
-                                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
+                                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
                                     {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && (t.task_start_date?.substring(0, 10) === todayStr || !t.task_start_date)).length}
                                 </span>
                             )}
@@ -476,7 +476,7 @@ export default function AccountData() {
                         >
                             Overdue Tasks
                             {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && t.task_start_date && t.task_start_date.substring(0, 10) < todayStr).length > 0 && (
-                                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
+                                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
                                     {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && t.task_start_date && t.task_start_date.substring(0, 10) < todayStr).length}
                                 </span>
                             )}
@@ -490,7 +490,7 @@ export default function AccountData() {
                         >
                             History
                             {tasks.filter(t => t.db_status === 'Yes' || t.db_status === 'pending_approval').length > 0 && (
-                                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-500 text-[10px] text-white">
+                                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-500 text-[10px] text-white">
                                     {tasks.filter(t => t.db_status === 'Yes' || t.db_status === 'pending_approval').length}
                                 </span>
                             )}
@@ -831,7 +831,14 @@ export default function AccountData() {
                                             <span>Start:</span>
                                             <span className="font-medium text-foreground">{formatDate(task.task_start_date)}</span>
                                         </div>
-                                        <div>Given By: {task.given_by_username}</div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span>Name:</span>
+                                            <span className="font-medium text-foreground">{task.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span>Given By:</span>
+                                            <span className="font-medium text-foreground truncate">{task.given_by_username}</span>
+                                        </div>
                                     </div>
 
                                     {activeTab !== 'history' && (
