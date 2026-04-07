@@ -130,7 +130,7 @@ export default function DelegatedTask() {
         if (!matchesMainTab) return false
 
         // 2. Secondary Status Tab Logic
-        if (activeTab === 'history') {
+        if (activeTab === 'completed') {
             matchesTab = isCompletedOrPending
         } else if (activeTab === 'pending') {
             // Pending tab: tasks that are NOT submitted/pending_approval AND are for today or future (or no date)
@@ -158,11 +158,45 @@ export default function DelegatedTask() {
     const currentItems = filteredTasks.slice(indexOfFirstItem, indexOfLastItem).slice(0, visibleItemsInBuffer)
     const totalPages = Math.ceil(filteredTasks.length / itemsPerPage)
 
-    // Calculate Counts for Tabs (using base tasks list)
+    // Calculate Stats for Tabs
+    const isCompletedStatus = (t) => t.db_status === 'Yes' || t.db_status === 'pending_approval';
+    const isPendingStatus = (t) => {
+        const isNotDone = !isCompletedStatus(t) || t.db_status === 'rejected';
+        const dStr = t.task_start_date ? t.task_start_date.substring(0, 10) : null;
+        return isNotDone && (dStr >= todayStr || !dStr);
+    };
+    const isOverdueStatus = (t) => {
+        const isNotDone = !isCompletedStatus(t) || t.db_status === 'rejected';
+        const dStr = t.task_start_date ? t.task_start_date.substring(0, 10) : null;
+        return isNotDone && dStr && dStr < todayStr;
+    };
+
+    // Calculate Main Tab Totals (Using Total count of all tasks in that category)
     const delegatedTasksCount = tasks.filter(t =>
         currentUser.username === 'admin' ? true : (t.given_by_username === currentUser.username || t.given_by_username === currentUser.fullName)
     ).length
     const assignedWorkCount = tasks.filter(t => t.name === currentUser.fullName).length
+
+    // Calculate Pending Counts for Main Tabs (To show in sidebar or highlights if needed)
+    const delegatedPendingCount = tasks.filter(t =>
+        (currentUser.username === 'admin' ? true : (t.given_by_username === currentUser.username || t.given_by_username === currentUser.fullName))
+        && isPendingStatus(t)
+    ).length
+    const assignedPendingCount = tasks.filter(t => t.name === currentUser.fullName && isPendingStatus(t)).length
+
+    // Calculate Sub-tab Counts for the currently active main category
+    const currentViewTasks = tasks.filter(t => {
+        if (activeMainTab === 'delegated') {
+            return currentUser.username === 'admin' ? true : (t.given_by_username === currentUser.username || t.given_by_username === currentUser.fullName);
+        }
+        return t.name === currentUser.fullName;
+    });
+
+    const subTabStats = {
+        pending: currentViewTasks.filter(isPendingStatus).length,
+        overdue: currentViewTasks.filter(isOverdueStatus).length,
+        completed: currentViewTasks.filter(isCompletedStatus).length
+    };
 
     const handleScroll = (e) => {
         const { scrollTop, scrollHeight, clientHeight } = e.target
@@ -226,7 +260,7 @@ export default function DelegatedTask() {
                                     }`}
                             >
                                 <Share2 className="h-4 w-4" />
-                                Delegated Tasks ({delegatedTasksCount})
+                                Delegated Tasks ({delegatedPendingCount})
                             </button>
                             <button
                                 onClick={() => setActiveMainTab("assigned")}
@@ -236,12 +270,12 @@ export default function DelegatedTask() {
                                     }`}
                             >
                                 <CheckCircle2 className="h-4 w-4" />
-                                Assigned Work ({assignedWorkCount})
+                                Assigned Work ({assignedPendingCount})
                             </button>
                         </div>
 
                         <div className="flex items-center gap-1 p-1 bg-gray-100/80 border border-gray-200 rounded-xl w-fit">
-                            {['pending', 'overdue', 'history'].map((tab) => (
+                            {['pending', 'overdue', 'completed'].map((tab) => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
@@ -250,7 +284,7 @@ export default function DelegatedTask() {
                                         : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200/50'
                                         } capitalize`}
                                 >
-                                    {tab}
+                                    {tab} ({subTabStats[tab] || 0})
                                 </button>
                             ))}
                         </div>

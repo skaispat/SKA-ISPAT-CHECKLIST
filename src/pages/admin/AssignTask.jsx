@@ -244,7 +244,11 @@ export default function AssignTask() {
         const selectedDept = rawDepartmentsData.find(d => d.dept_name === formData.department);
         if (!selectedDept) return [];
 
-        return doerOptions.filter(user => user.dept_id === selectedDept.dept_id);
+        return doerOptions.filter(user =>
+            user.dept_id === selectedDept.dept_id &&
+            user.full_name !== "Abhishek Agrawal (MD)" &&
+            user.full_name !== "Abhishek Agrawal"
+        );
     })();
 
 
@@ -284,7 +288,7 @@ export default function AssignTask() {
                 setGivenByOptions(admins);
             }
 
-            console.log("Supabase options loaded successfully");
+            // console.log("Supabase options loaded successfully");
 
         } catch (error) {
             console.error("Error fetching dropdown options from Supabase:", error)
@@ -850,6 +854,17 @@ export default function AssignTask() {
             });
             const timestampIST = `${timeInIndia}+05:30`;
 
+            // Map for assigner phone numbers (hardcoded as requested)
+            const assignerPhoneMap = {
+                "Abhishek Agrawal (MD)": "8866666985",
+                "Pawan Tiwari": "9109164455",
+                "Kushal Rathod": "8007706237",
+                "Rohini Jaiswal": "9874563210"
+            };
+
+            // console.log("Form Data GivenBy:", formData.givenBy);
+            // console.log("Form Data Frequency:", formData.frequency);
+
             // Prepare all tasks data for batch insertion to Supabase
             const tasksToInsert = generatedTasks.map((task) => {
                 // Convert DD/MM/YYYY to YYYY-MM-DD for Postgres date
@@ -859,6 +874,13 @@ export default function AssignTask() {
                 // Find the doer's mobile number for WhatsApp notification
                 const doerObj = doerOptions.find(u => u.full_name === task.doer);
                 const whatsappNo = doerObj ? doerObj.mobile_number : null;
+
+                // For one-time tasks, also store the assigner's whatsapp number
+                // Convert to string first to ensure lookup, then let Postgres handle int8 cast or use Number()
+                const assignerName = task.givenBy ? task.givenBy.trim() : "";
+                const assignerWhatsappNo = task.frequency === 'one-time' ? (assignerPhoneMap[assignerName] || null) : null;
+
+                // console.log(`Task Mapping - Frequency: ${task.frequency}, GivenBy: [${assignerName}], Mapped Number: ${assignerWhatsappNo}`);
 
                 return {
                     timestamp: timestampIST, // Send Kolkata time with offset
@@ -873,6 +895,7 @@ export default function AssignTask() {
                     require_attachment: task.requireAttachment,
                     skip_days: task.frequency === "daily" ? skipDays : [],
                     whatsapp_no: whatsappNo, // For WhatsApp notification
+                    assigner_whatsapp_no: assignerWhatsappNo, // Storing assigner's number for one-time tasks
                     location: [task.location], // Wrap in array as database type is text[]
                     status: 'pending' // Default status
                 };
@@ -1007,8 +1030,8 @@ export default function AssignTask() {
                                             className="w-full appearance-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-[#991B1B] focus:outline-none focus:ring-1 focus:ring-[#991B1B] transition-all"
                                         >
                                             <option value="">Select Delegator</option>
+                                            <option value="Abhishek Agrawal (MD)">Abhishek Agrawal (MD)</option>
                                             <option value="Pawan Tiwari">Pawan Tiwari</option>
-                                            <option value="Abhishek Agrawal">Abhishek Agrawal</option>
                                             <option value="Kushal Rathod">Kushal Rathod</option>
                                             <option value="Rohini Jaiswal">Rohini Jaiswal</option>
                                         </select>

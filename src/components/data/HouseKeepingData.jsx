@@ -212,7 +212,7 @@ export default function HouseKeepingData() {
                 const username = sessionStorage.getItem("username") || "unknown"
 
                 const updateData = {
-                    status: 'pending_approval',
+                    status: task.freq === 'one-time' ? 'Yes' : 'pending_approval',
                     remarks: finalRemarks,
                     uploaded_image: task.uploaded_image,
                     actual: new Date().toISOString().split('T')[0], // Extract only YYYY-MM-DD

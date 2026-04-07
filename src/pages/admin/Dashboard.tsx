@@ -162,6 +162,7 @@ export default function AdminDashboard() {
     const { overviewChartData, overviewPieData } = useMemo(() => {
         let barData = [];
         const pieCounts = { Completed: 0, Pending: 0, Overdue: 0 };
+        const todayStr = new Date().toLocaleDateString('en-CA');
 
         if (overviewMonth === -1) {
             // Yearly View: 12 Months
@@ -173,10 +174,11 @@ export default function AdminDashboard() {
             departmentData.allTasks.forEach(task => {
                 const dueDate = parseDateFromDDMMYYYY(task.dueDate);
                 const completeDate = task.actual ? new Date(task.actual) : null;
+                const taskDateStr = task.task_start_date ? task.task_start_date.substring(0, 10) : null;
+                const isDueUpToToday = taskDateStr && taskDateStr <= todayStr;
 
-                // For Chart Distribution (Bar Chart)
-                // Logic: Count Pending/Overdue in Due Month. Count Completed in Actual Month (or Due Month if actual missing).
-                // Filter by Overview Year.
+                // For overview charts, we only show past/current tasks (till today)
+                if (!isDueUpToToday) return;
 
                 if (task.status === 'completed') {
                     const targetDate = completeDate || dueDate;
@@ -209,6 +211,10 @@ export default function AdminDashboard() {
             departmentData.allTasks.forEach(task => {
                 const dueDate = parseDateFromDDMMYYYY(task.dueDate);
                 const completeDate = task.actual ? new Date(task.actual) : null;
+                const taskDateStr = task.task_start_date ? task.task_start_date.substring(0, 10) : null;
+                const isDueUpToToday = taskDateStr && taskDateStr <= todayStr;
+
+                if (!isDueUpToToday) return;
 
                 if (task.status === 'completed') {
                     const targetDate = completeDate || dueDate;
@@ -660,7 +666,9 @@ export default function AdminDashboard() {
                         } else if (taskDate) {
                             // Fallback to task date if actual missing but status is Yes
                             const monthName = taskDate.toLocaleString('default', { month: 'short' });
-                            if (monthlyData[monthName]) monthlyData[monthName].completed++;
+                            if (monthlyData[monthName]) {
+                                monthlyData[monthName].completed++;
+                            }
                         }
                     } else {
                         // Pending or Overdue (only for tasks till today)
@@ -893,13 +901,19 @@ export default function AdminDashboard() {
     )
 
     const StaffTasksTable = () => {
+        const todayStr = new Date().toLocaleDateString('en-CA');
         const filteredStaffMembers = departmentData.staffMembers.map(staff => {
             const staffTasks = departmentData.allTasks.filter(task => task.assignedTo === staff.name);
 
-            // Filter tasks by selected Month and Year
+            // Filter tasks by selected Month and Year AND strictly till today
             const filteredTasks = staffTasks.filter(task => {
                 const dueDate = parseDateFromDDMMYYYY(task.dueDate);
                 const actualDate = task.actual ? new Date(task.actual) : null;
+                const taskDateStr = task.task_start_date ? task.task_start_date.substring(0, 10) : null;
+                const isDueUpToToday = taskDateStr && taskDateStr <= todayStr;
+
+                // For performance stats, only count tasks up to today
+                if (!isDueUpToToday) return false;
 
                 const isDueInMonth = dueDate &&
                     (performanceMonth === -1 || dueDate.getMonth() === performanceMonth) &&
@@ -1059,41 +1073,99 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* Stats Grid */}
-                <div className="grid grid-cols-2 gap-3 md:gap-6 lg:grid-cols-4">
-                    <StatCard
-                        title="Total Tasks"
-                        value={departmentData.totalTasks}
-                        description={selectedMasterOption !== "Select Department" ? `in ${selectedMasterOption}` : "Select department"}
-                        icon={<ListTodo />}
-                        accentColor="blue"
-                        onClick={() => setStatModal({ isOpen: true, type: 'all', title: 'Total Tasks' })}
-                    />
-                    <StatCard
-                        title="Completed"
-                        value={departmentData.completedTasks}
-                        description="Total completed"
-                        icon={<CheckCircle2 />}
-                        accentColor="green"
-                        onClick={() => setStatModal({ isOpen: true, type: 'completed', title: 'Completed Tasks' })}
-                    />
-                    <StatCard
-                        title="Pending"
-                        value={departmentData.pendingTasks}
-                        description="Awaiting completion"
-                        icon={<Clock />}
-                        accentColor="amber"
-                        onClick={() => setStatModal({ isOpen: true, type: 'pending', title: 'Pending Tasks' })}
-                    />
-                    <StatCard
-                        title="Overdue"
-                        value={departmentData.overdueTasks}
-                        description="Requires attention"
-                        icon={<AlertTriangle />}
-                        accentColor="red"
-                        alert={true}
-                        onClick={() => setStatModal({ isOpen: true, type: 'overdue', title: 'Overdue Tasks' })}
-                    />
+                {/* Stats and Graph Section - Optimized Breakpoints */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 md:gap-8">
+                    {/* Left: Stats Cards (2 columns, 2 rows) */}
+                    <div className="grid grid-cols-2 gap-4 md:gap-6 h-fit">
+                        <StatCard
+                            title="Total Tasks"
+                            value={departmentData.totalTasks}
+                            description={selectedMasterOption !== "Select Department" ? `in ${selectedMasterOption}` : "Select department"}
+                            icon={<ListTodo />}
+                            accentColor="blue"
+                            onClick={() => setStatModal({ isOpen: true, type: 'all', title: 'Total Tasks' })}
+                        />
+                        <StatCard
+                            title="Completed"
+                            value={departmentData.completedTasks}
+                            description="Total completed"
+                            icon={<CheckCircle2 />}
+                            accentColor="green"
+                            onClick={() => setStatModal({ isOpen: true, type: 'completed', title: 'Completed Tasks' })}
+                        />
+                        <StatCard
+                            title="Pending"
+                            value={departmentData.pendingTasks}
+                            description="Awaiting completion"
+                            icon={<Clock />}
+                            accentColor="amber"
+                            onClick={() => setStatModal({ isOpen: true, type: 'pending', title: 'Pending Tasks' })}
+                        />
+                        <StatCard
+                            title="Overdue"
+                            value={departmentData.overdueTasks}
+                            description="Requires attention"
+                            icon={<AlertTriangle />}
+                            accentColor="red"
+                            alert={true}
+                            onClick={() => setStatModal({ isOpen: true, type: 'overdue', title: 'Overdue Tasks' })}
+                        />
+                    </div>
+
+                    {/* Right: Status Distribution Graph with Percentages */}
+                    <div className="rounded-[2.5rem] border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-all h-full">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-gray-900 tracking-tight uppercase">Status Distribution</h3>
+                            <div className="p-1.5 bg-gray-50 rounded-lg">
+                                <FileBarChart className="h-5 w-5 text-gray-400" />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col lg:flex-row items-center justify-between gap-4 lg:gap-6 min-h-[400px] sm:min-h-[450px] lg:min-h-0 lg:h-[220px]">
+                            <div className="relative w-full h-[250px] sm:h-[300px] lg:h-full lg:w-1/2 flex items-center justify-center">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={overviewPieData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={65}
+                                            outerRadius={85}
+                                            paddingAngle={8}
+                                            dataKey="value"
+                                        >
+                                            {overviewPieData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase">Done</span>
+                                    <span className="text-xl font-bold text-gray-900">{departmentData.completionRate}%</span>
+                                </div>
+                            </div>
+
+                            {/* Custom Legend with Percentages - Responsive Width */}
+                            <div className="w-full lg:w-1/2 flex flex-col gap-3">
+                                {overviewPieData.map((item, idx) => {
+                                    const percentage = departmentData.totalTasks > 0 ? ((item.value / departmentData.totalTasks) * 100).toFixed(2) : "0.00";
+                                    return (
+                                        <div key={idx} className="flex items-center justify-between p-3 rounded-[1.2rem] border border-gray-50 bg-white shadow-sm transition-all hover:border-gray-200">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`h-2.5 w-2.5 rounded-full shadow-sm`} style={{ backgroundColor: item.color }} />
+                                                <span className="text-[11px] font-black text-gray-700 tracking-wider font-mono uppercase">{item.name}</span>
+                                            </div>
+                                            <span className="text-[11px] font-black text-gray-900 font-mono">{percentage}%</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Task Navigation and List */}
@@ -1273,44 +1345,19 @@ export default function AdminDashboard() {
                             </div>
                         </div>
 
-                        <div className="group rounded-xl border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md transition-all duration-200">
-                            <div className="flex items-center gap-4">
-                                <div className="flex-1">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <h3 className="text-sm font-medium text-gray-500">Completion Rate</h3>
-                                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${parseFloat(departmentData.completionRate.toString()) >= 70 ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-                                            {parseFloat(departmentData.completionRate.toString()) >= 70 ? 'On Track' : 'Focus Needed'}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-baseline gap-2 mb-2">
-                                        <span className="text-2xl font-bold text-gray-900">{departmentData.completionRate}%</span>
-                                        <span className="text-xs text-gray-400">
-                                            ({departmentData.completedTasks}/{departmentData.totalTasks} Done)
-                                        </span>
-                                    </div>
-                                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-[#991B1B] rounded-full transition-all duration-1000"
-                                            style={{ width: `${departmentData.completionRate}%` }}
-                                        ></div>
-                                    </div>
-                                </div>
-                                <div className="h-12 w-12 rounded-full bg-[#FEF2F2] flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-200">
-                                    <CheckCircle2 className="h-6 w-6 text-[#991B1B]" />
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
                 {/* Bottom Section: Tabs and Report */}
                 <div className="space-y-6">
                     <div>
-                        <div className="inline-flex items-center p-1 rounded-xl bg-gray-100/80 border border-gray-200">
+                    <div className="overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2">
+                        <div className="inline-flex items-center p-1 rounded-xl bg-gray-100/80 border border-gray-200 min-w-max">
                             <BottomTab active={activeTab === "overview"} onClick={() => setActiveTab("overview")} label="Overview" icon={<LayoutDashboard className="h-4 w-4" />} />
                             <BottomTab active={activeTab === "mis"} onClick={() => setActiveTab("mis")} label="MIS Report" icon={<FileBarChart className="h-4 w-4" />} />
                             <BottomTab active={activeTab === "staff"} onClick={() => setActiveTab("staff")} label="Staff Performance" icon={<UserCheck className="h-4 w-4" />} />
                         </div>
+                    </div>
                     </div>
 
                     <div className="min-h-[400px]">
@@ -1326,11 +1373,11 @@ export default function AdminDashboard() {
                                                     : `Daily completion for ${new Date(0, overviewMonth).toLocaleString('default', { month: 'long' })} ${overviewYear}`}
                                             </p>
                                         </div>
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 mt-2 sm:mt-0 overflow-x-auto pb-2 scrollbar-none">
                                             <select
                                                 value={overviewMonth}
                                                 onChange={(e) => setOverviewMonth(parseInt(e.target.value))}
-                                                className="rounded-lg border-gray-200 bg-gray-50 text-sm py-1.5 focus:border-[#991B1B] focus:ring-[#991B1B]"
+                                                className="rounded-lg border-gray-200 bg-gray-50 text-xs sm:text-sm py-1.5 focus:border-[#991B1B] focus:ring-[#991B1B] min-w-[120px]"
                                             >
                                                 <option value={-1}>All Months</option>
                                                 {Array.from({ length: 12 }, (_, i) => (
@@ -1340,7 +1387,7 @@ export default function AdminDashboard() {
                                             <select
                                                 value={overviewYear}
                                                 onChange={(e) => setOverviewYear(parseInt(e.target.value))}
-                                                className="rounded-lg border-gray-200 bg-gray-50 text-sm py-1.5 focus:border-[#991B1B] focus:ring-[#991B1B]"
+                                                className="rounded-lg border-gray-200 bg-gray-50 text-xs sm:text-sm py-1.5 focus:border-[#991B1B] focus:ring-[#991B1B] min-w-[100px]"
                                             >
                                                 <option value={-1}>All Years</option>
                                                 {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
@@ -1351,7 +1398,7 @@ export default function AdminDashboard() {
                                     </div>
                                     <TasksOverviewChart />
                                 </div>
-                                <div className="lg:col-span-3 rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+                                {/* <div className="lg:col-span-3 rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
                                     <div className="mb-6 flex items-center justify-between">
                                         <div>
                                             <h3 className="text-base font-semibold text-gray-900">Status Distribution</h3>
@@ -1362,7 +1409,7 @@ export default function AdminDashboard() {
                                         </div>
                                     </div>
                                     <TasksCompletionChart />
-                                </div>
+                                </div> */}
 
 
                             </div>
@@ -1381,7 +1428,7 @@ export default function AdminDashboard() {
                                         </div>
                                     </div>
 
-                                    <div className="flex flex-col md:flex-row gap-4 items-end mb-8">
+                                    <div className="flex flex-col md:flex-row gap-4 items-stretch md:items-end mb-8">
                                         <div className="space-y-1.5 flex-1 w-full">
                                             <label className="text-xs font-medium text-gray-500">Staff Member</label>
                                             <div className="relative">
@@ -1397,57 +1444,61 @@ export default function AdminDashboard() {
                                                 </select>
                                             </div>
                                         </div>
-                                        <div className="space-y-1.5 flex-1 w-full">
-                                            <label className="text-xs font-medium text-gray-500">Start Date</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="date"
-                                                    value={dateRange.startDate}
-                                                    max={dateRange.endDate}
-                                                    onChange={(e) => {
-                                                        const newStartDate = e.target.value;
-                                                        if (dateRange.endDate && newStartDate > dateRange.endDate) {
-                                                            alert("Start date cannot be later than end date");
-                                                            return;
-                                                        }
-                                                        setDateRange(prev => ({ ...prev, startDate: newStartDate }));
-                                                    }}
-                                                    className="w-full rounded-lg border-gray-200 bg-gray-50/50 pl-4 pr-4 py-2 text-sm focus:border-[#991B1B] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#991B1B] transition-all"
-                                                />
+                                        <div className="flex flex-row gap-3 w-full md:flex-1">
+                                            <div className="space-y-1.5 flex-1">
+                                                <label className="text-xs font-medium text-gray-500">Start Date</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="date"
+                                                        value={dateRange.startDate}
+                                                        max={dateRange.endDate}
+                                                        onChange={(e) => {
+                                                            const newStartDate = e.target.value;
+                                                            if (dateRange.endDate && newStartDate > dateRange.endDate) {
+                                                                alert("Start date cannot be later than end date");
+                                                                return;
+                                                            }
+                                                            setDateRange(prev => ({ ...prev, startDate: newStartDate }));
+                                                        }}
+                                                        className="w-full rounded-lg border-gray-200 bg-gray-50/50 px-2 sm:px-4 py-2 text-xs sm:text-sm focus:border-[#991B1B] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#991B1B] transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5 flex-1">
+                                                <label className="text-xs font-medium text-gray-500">End Date</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="date"
+                                                        value={dateRange.endDate}
+                                                        min={dateRange.startDate}
+                                                        onChange={(e) => {
+                                                            const newEndDate = e.target.value;
+                                                            if (dateRange.startDate && newEndDate < dateRange.startDate) {
+                                                                alert("End date cannot be earlier than start date");
+                                                                return;
+                                                            }
+                                                            setDateRange(prev => ({ ...prev, endDate: newEndDate }));
+                                                        }}
+                                                        className="w-full rounded-lg border-gray-200 bg-gray-50/50 px-2 sm:px-4 py-2 text-xs sm:text-sm focus:border-[#991B1B] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#991B1B] transition-all"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="space-y-1.5 flex-1 w-full">
-                                            <label className="text-xs font-medium text-gray-500">End Date</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="date"
-                                                    value={dateRange.endDate}
-                                                    min={dateRange.startDate}
-                                                    onChange={(e) => {
-                                                        const newEndDate = e.target.value;
-                                                        if (dateRange.startDate && newEndDate < dateRange.startDate) {
-                                                            alert("End date cannot be earlier than start date");
-                                                            return;
-                                                        }
-                                                        setDateRange(prev => ({ ...prev, endDate: newEndDate }));
-                                                    }}
-                                                    className="w-full rounded-lg border-gray-200 bg-gray-50/50 pl-4 pr-4 py-2 text-sm focus:border-[#991B1B] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#991B1B] transition-all"
-                                                />
-                                            </div>
+                                        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto mt-2 md:mt-0">
+                                            <button
+                                                onClick={filterTasksByDateRange}
+                                                className="w-full md:w-auto h-[40px] bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 rounded-lg text-xs font-medium transition-colors shadow-sm flex items-center justify-center gap-2"
+                                            >
+                                                Apply Filter
+                                            </button>
+                                            <button
+                                                onClick={generatePDFReport}
+                                                className="w-full md:w-auto h-[40px] bg-[#991B1B] hover:bg-[#7f1616] text-white px-6 rounded-lg text-xs font-medium transition-colors shadow-sm flex items-center justify-center gap-2"
+                                            >
+                                                <FileBarChart className="h-4 w-4" />
+                                                Generate PDF
+                                            </button>
                                         </div>
-                                        <button
-                                            onClick={filterTasksByDateRange}
-                                            className="w-full md:w-auto h-[38px] bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 px-4 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center justify-center gap-2"
-                                        >
-                                            Apply Filter
-                                        </button>
-                                        <button
-                                            onClick={generatePDFReport}
-                                            className="w-full md:w-auto h-[38px] bg-[#991B1B] hover:bg-[#7f1616] text-white px-6 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center justify-center gap-2"
-                                        >
-                                            <FileBarChart className="h-4 w-4" />
-                                            Generate Report (PDF)
-                                        </button>
                                     </div>
 
                                     <div className="grid gap-4 md:grid-cols-3">
@@ -1489,11 +1540,11 @@ export default function AdminDashboard() {
                                             <p className="text-xs text-gray-500 mt-1">Detailed breakdown of staff efficiency and task completion</p>
                                         </div>
 
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 mt-2 sm:mt-0 overflow-x-auto pb-2 scrollbar-none">
                                             <select
                                                 value={performanceMonth}
                                                 onChange={(e) => setPerformanceMonth(parseInt(e.target.value))}
-                                                className="rounded-lg border-gray-200 bg-gray-50 text-sm py-1.5 focus:border-[#991B1B] focus:ring-[#991B1B]"
+                                                className="rounded-lg border-gray-200 bg-gray-50 text-xs sm:text-sm py-1.5 focus:border-[#991B1B] focus:ring-[#991B1B] min-w-[120px]"
                                             >
                                                 <option value={-1}>All Months</option>
                                                 {Array.from({ length: 12 }, (_, i) => (
@@ -1503,14 +1554,14 @@ export default function AdminDashboard() {
                                             <select
                                                 value={performanceYear}
                                                 onChange={(e) => setPerformanceYear(parseInt(e.target.value))}
-                                                className="rounded-lg border-gray-200 bg-gray-50 text-sm py-1.5 focus:border-[#991B1B] focus:ring-[#991B1B]"
+                                                className="rounded-lg border-gray-200 bg-gray-50 text-xs sm:text-sm py-1.5 focus:border-[#991B1B] focus:ring-[#991B1B] min-w-[100px]"
                                             >
                                                 <option value={-1}>All Years</option>
                                                 {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map(year => (
                                                     <option key={year} value={year}>{year}</option>
                                                 ))}
                                             </select>
-                                            <div className="p-2 bg-gray-50 rounded-lg hidden sm:block">
+                                            <div className="p-2 bg-gray-50 rounded-lg hidden lg:block shrink-0">
                                                 <UserCheck className="h-4 w-4 text-gray-400" />
                                             </div>
                                         </div>
@@ -1532,7 +1583,17 @@ export default function AdminDashboard() {
                     onClose={() => setStatModal({ ...statModal, isOpen: false })}
                     title={statModal.title}
                     tasks={departmentData.allTasks.filter(t => {
+                        const todayStr = new Date().toLocaleDateString('en-CA');
+                        const taskDateStr = t.task_start_date ? t.task_start_date.substring(0, 10) : null;
+                        const isTillToday = taskDateStr && taskDateStr <= todayStr;
+                        const isToday = taskDateStr === todayStr;
+
+                        if (!isTillToday) return false;
                         if (statModal.type === 'all') return true;
+
+                        // For Pending card, we only show Today's pending
+                        if (statModal.type === 'pending') return isToday && t.status === 'pending';
+
                         return t.status === statModal.type;
                     })}
                 />
@@ -1546,41 +1607,11 @@ const StatCard = ({ title, value, description, icon, accentColor = "gray", alert
     const colorKey = alert ? "red" : accentColor;
 
     const colorStyles = {
-        blue: {
-            border: "border-blue-200 hover:border-blue-300",
-            bg: "bg-blue-50/50",
-            iconBg: "bg-blue-100/80 text-blue-600",
-            text: "text-blue-900",
-            subtext: "text-blue-600/80"
-        },
-        green: {
-            border: "border-green-200 hover:border-green-300",
-            bg: "bg-green-50/50",
-            iconBg: "bg-green-100/80 text-green-600",
-            text: "text-green-900",
-            subtext: "text-green-600/80"
-        },
-        amber: {
-            border: "border-amber-200 hover:border-amber-300",
-            bg: "bg-amber-50/50",
-            iconBg: "bg-amber-100/80 text-amber-600",
-            text: "text-amber-900",
-            subtext: "text-amber-600/80"
-        },
-        red: {
-            border: "border-red-200 hover:border-red-300",
-            bg: "bg-red-50/50",
-            iconBg: "bg-red-100/80 text-red-600",
-            text: "text-red-900",
-            subtext: "text-red-600/80"
-        },
-        gray: {
-            border: "border-gray-200 hover:border-gray-300",
-            bg: "bg-white",
-            iconBg: "bg-gray-100 text-gray-500",
-            text: "text-gray-900",
-            subtext: "text-gray-500"
-        }
+        blue: { border: "border-blue-200", icon: "text-blue-600", bg: "bg-blue-50", shadow: "hover:shadow-blue-200/50" },
+        green: { border: "border-green-200", icon: "text-green-600", bg: "bg-green-50", shadow: "hover:shadow-green-200/50" },
+        amber: { border: "border-amber-200", icon: "text-amber-600", bg: "bg-amber-50", shadow: "hover:shadow-amber-200/50" },
+        red: { border: "border-red-200", icon: "text-red-600", bg: "bg-red-50", shadow: "hover:shadow-red-200/50" },
+        gray: { border: "border-gray-200", icon: "text-gray-500", bg: "bg-gray-50", shadow: "hover:shadow-gray-200/50" }
     }
 
     const style = colorStyles[colorKey as keyof typeof colorStyles] || colorStyles.gray
@@ -1588,21 +1619,25 @@ const StatCard = ({ title, value, description, icon, accentColor = "gray", alert
     return (
         <div
             onClick={onClick}
-            className={`group relative overflow-hidden rounded-xl border p-4 md:p-6 transition-all hover:shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${style.border} ${style.bg}`}
+            className={`group relative overflow-hidden rounded-[2rem] border ${style.border} p-5 transition-all hover:shadow-xl cursor-pointer ${style.bg} hover:-translate-y-1 active:scale-95 shadow-sm ${style.shadow}`}
         >
-            <div className="flex items-center justify-between">
-                <div className={`rounded-lg p-1.5 md:p-2 ${style.iconBg}`}>
-                    {icon && <div className="h-4 w-4 md:h-5 md:w-5">{icon}</div>}
-                </div>
+            {/* Clean Corner Icon (No background box) */}
+            <div className={`absolute top-4 right-4 sm:top-5 sm:right-5 ${style.icon} flex items-center justify-center transition-transform group-hover:scale-125 duration-300`}>
+                {icon && <div className="h-5 w-5 sm:h-6 sm:w-6">{icon}</div>}
             </div>
-            <div className="mt-3 md:mt-4">
-                <h3 className={`text-[10px] md:text-sm font-medium uppercase tracking-wide md:normal-case ${style.subtext}`}>{title}</h3>
-                <div className="mt-1 md:mt-2 flex items-baseline gap-2">
-                    <span className={`text-xl md:text-3xl font-bold tracking-tight ${style.text}`}>
-                        {value}
-                    </span>
+
+            <div className="flex flex-col relative h-full">
+                <div>
+                    <h3 className={`text-[11px] font-bold uppercase tracking-widest opacity-70 ${style.icon} mb-1 pr-12`}>
+                        {title}
+                    </h3>
+                    <div className="flex items-baseline gap-2">
+                        <span className={`text-3xl font-black tracking-tight text-gray-900 group-hover:scale-105 transition-transform origin-left duration-300`}>
+                            {value}
+                        </span>
+                    </div>
                 </div>
-                <p className={`mt-0.5 md:mt-1 text-[10px] md:text-xs line-clamp-1 ${style.subtext}`}>{description}</p>
+                <p className={`mt-auto text-[10px] font-medium text-gray-400 uppercase tracking-tight pt-1`}>{description}</p>
             </div>
         </div>
     )

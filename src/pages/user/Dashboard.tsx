@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
-import { LayoutDashboard, CheckCircle2, Clock, AlertTriangle, ArrowRight, ListTodo, FileBarChart, Loader2, Search, X, ChevronLeft, ChevronRight, Users } from 'lucide-react'
+import { LayoutDashboard, CheckCircle2, Clock, AlertTriangle, ArrowRight, ListTodo, FileBarChart, Loader2, Search, X, ChevronLeft, ChevronRight, Users, PieChart as PieChartIcon } from 'lucide-react'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import AdminLayout from "../../components/layout/AdminLayout"
 import { supabase } from "../../supabase"
 
@@ -207,47 +208,115 @@ const UserDashboard = () => {
                     </Link>
                 </div>
 
-                {/* Stats Cards */}
-                <div className="grid grid-cols-2 gap-3 md:gap-6 lg:grid-cols-4">
-                    <StatCard
-                        title="Total Tasks"
-                        value={stats.total}
-                        description="Assigned to you"
-                        icon={<ListTodo />}
-                        accentColor="blue"
-                        onClick={() => setStatModal({ isOpen: true, type: 'all', title: 'Total Tasks' })}
-                    />
-                    <StatCard
-                        title="Completed"
-                        value={stats.completed}
-                        description={`${stats.completionRate}% completion rate`}
-                        icon={<CheckCircle2 />}
-                        accentColor="green"
-                        onClick={() => setStatModal({ isOpen: true, type: 'completed', title: 'Completed Tasks' })}
-                    />
-                    <StatCard
-                        title="Pending"
-                        value={stats.pending}
-                        description="Tasks to be completed"
-                        icon={<Clock />}
-                        accentColor="amber"
-                        onClick={() => setStatModal({ isOpen: true, type: 'pending', title: 'Pending Tasks' })}
-                    />
-                    <StatCard
-                        title="Overdue"
-                        value={stats.overdue}
-                        description="Requires immediate attention"
-                        icon={<AlertTriangle />}
-                        accentColor="red"
-                        alert={true}
-                        onClick={() => setStatModal({ isOpen: true, type: 'overdue', title: 'Overdue Tasks' })}
-                    />
+                {/* Stats and Graph Section - Optimized Breakpoints */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 md:gap-8">
+                    {/* Left: Stats Cards (2 columns, 2 rows) */}
+                    <div className="grid grid-cols-2 gap-4 md:gap-6 h-fit">
+                        <StatCard
+                            title="Total Tasks"
+                            value={stats.total}
+                            description="Assigned to you"
+                            icon={<ListTodo />}
+                            accentColor="blue"
+                            onClick={() => setStatModal({ isOpen: true, type: 'all', title: 'Total Tasks' })}
+                        />
+                        <StatCard
+                            title="Completed"
+                            value={stats.completed}
+                            description={`${stats.completionRate}% completion rate`}
+                            icon={<CheckCircle2 />}
+                            accentColor="green"
+                            onClick={() => setStatModal({ isOpen: true, type: 'completed', title: 'Completed Tasks' })}
+                        />
+                        <StatCard
+                            title="Pending"
+                            value={stats.pending}
+                            description="Tasks to be completed"
+                            icon={<Clock />}
+                            accentColor="amber"
+                            onClick={() => setStatModal({ isOpen: true, type: 'pending', title: 'Pending Tasks' })}
+                        />
+                        <StatCard
+                            title="Overdue"
+                            value={stats.overdue}
+                            description="Requires immediate attention"
+                            icon={<AlertTriangle />}
+                            accentColor="red"
+                            alert={true}
+                            onClick={() => setStatModal({ isOpen: true, type: 'overdue', title: 'Overdue Tasks' })}
+                        />
+                    </div>
+
+                    {/* Right: Status Distribution Graph with Percentages */}
+                    <div className="rounded-[2.5rem] border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-all h-full">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-lg font-bold text-gray-900 tracking-tight uppercase">Status Distribution</h3>
+                            <PieChartIcon className="h-5 w-5 text-gray-300" />
+                        </div>
+
+                        <div className="flex flex-col lg:flex-row items-center justify-between gap-4 lg:gap-6 min-h-[200px] lg:h-[220px]">
+                            <div className="relative w-full h-[200px] lg:h-full lg:w-1/2 flex items-center justify-center">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={[
+                                                { name: "Completed", value: stats.completed, color: "#22c55e" },
+                                                { name: "Pending", value: stats.pending, color: "#facc15" },
+                                                { name: "Overdue", value: stats.overdue, color: "#ef4444" }
+                                            ]}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius={65}
+                                            outerRadius={85}
+                                            paddingAngle={8}
+                                            dataKey="value"
+                                        >
+                                            {[
+                                                { name: "Completed", color: "#22c55e" },
+                                                { name: "Pending", color: "#facc15" },
+                                                { name: "Overdue", color: "#ef4444" }
+                                            ].map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.color} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                    <span className="text-[10px] font-bold text-gray-500 uppercase">Done</span>
+                                    <span className="text-xl font-bold text-gray-900">{stats.completionRate}%</span>
+                                </div>
+                            </div>
+
+                            {/* Custom Legend with Percentages - Responsive Width */}
+                            <div className="w-full lg:w-1/2 flex flex-col gap-3">
+                                {[
+                                    { label: "DONE", value: stats.completed, color: "bg-green-500", raw: stats.completed },
+                                    { label: "PENDING", value: stats.pending, color: "bg-amber-400", raw: stats.pending },
+                                    { label: "OVERDUE", value: stats.overdue, color: "bg-red-500", raw: stats.overdue }
+                                ].map((item, idx) => {
+                                    const percentage = stats.total > 0 ? ((item.raw / stats.total) * 100).toFixed(2) : "0.00";
+                                    return (
+                                        <div key={idx} className="flex items-center justify-between p-3 rounded-[1.2rem] border border-gray-50 bg-white shadow-sm transition-all hover:border-gray-200">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`h-2.5 w-2.5 rounded-full ${item.color} shadow-sm`} />
+                                                <span className="text-[11px] font-black text-gray-700 tracking-wider font-mono">{item.label}</span>
+                                            </div>
+                                            <span className="text-[11px] font-black text-gray-900 font-mono">{percentage}%</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Main Content Area */}
-                <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-                    {/* Left Column: Task Navigation & List */}
-                    <div className="lg:col-span-2 space-y-6">
+                <div className="grid grid-cols-1 gap-8">
+                    {/* Full Width Row for Task Navigation & List */}
+                    <div className="space-y-6">
                         <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
                             <div className="bg-[#FEF2F2]/30 p-1 border-b border-gray-100">
                                 <div className="grid grid-cols-2 gap-1">
@@ -323,51 +392,6 @@ const UserDashboard = () => {
                         </div>
                     </div>
 
-                    {/* Right Column: Overview */}
-                    <div className="space-y-6">
-                        <div className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-                            <div className="p-4 md:p-6">
-                                <div className="space-y-6">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex-1">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <h3 className="text-sm font-medium text-gray-500">Completion Rate</h3>
-                                                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${stats.completionRate >= 80 ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-                                                    {stats.completionRate >= 80 ? 'On Track' : 'Needs Focus'}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-baseline gap-2 mb-2">
-                                                <span className="text-2xl font-bold text-gray-900">{stats.completionRate}%</span>
-                                                <span className="text-xs text-gray-400">
-                                                    ({stats.completed}/{stats.total} Done)
-                                                </span>
-                                            </div>
-                                            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-[#991B1B] rounded-full transition-all duration-1000"
-                                                    style={{ width: `${stats.completionRate}%` }}
-                                                ></div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="pt-6 border-t border-gray-100">
-                                        <h4 className="text-sm font-medium text-gray-900 mb-4">Quick Stats</h4>
-                                        <div className="grid grid-cols-2 gap-3 md:gap-4">
-                                            <div className="p-3 bg-gray-50 rounded-lg">
-                                                <p className="text-xs text-gray-500">Pending</p>
-                                                <p className="text-lg font-bold text-gray-900 mt-1">{stats.pending}</p>
-                                            </div>
-                                            <div className="p-3 bg-gray-50 rounded-lg">
-                                                <p className="text-xs text-gray-500">Overdue</p>
-                                                <p className="text-lg font-bold text-red-600 mt-1">{stats.overdue}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
             {/* Stat Tasks Modal */}
@@ -409,41 +433,11 @@ const StatCard = ({ title, value, description, icon, accentColor = "gray", alert
     const colorKey = alert ? "red" : accentColor;
 
     const colorStyles = {
-        blue: {
-            border: "border-blue-200 hover:border-blue-300",
-            bg: "bg-blue-50/50",
-            iconBg: "bg-blue-100/80 text-blue-600",
-            text: "text-blue-900",
-            subtext: "text-blue-600/80"
-        },
-        green: {
-            border: "border-green-200 hover:border-green-300",
-            bg: "bg-green-50/50",
-            iconBg: "bg-green-100/80 text-green-600",
-            text: "text-green-900",
-            subtext: "text-green-600/80"
-        },
-        amber: {
-            border: "border-amber-200 hover:border-amber-300",
-            bg: "bg-amber-50/50",
-            iconBg: "bg-amber-100/80 text-amber-600",
-            text: "text-amber-900",
-            subtext: "text-amber-600/80"
-        },
-        red: {
-            border: "border-red-200 hover:border-red-300",
-            bg: "bg-red-50/50",
-            iconBg: "bg-red-100/80 text-red-600",
-            text: "text-red-900",
-            subtext: "text-red-600/80"
-        },
-        gray: {
-            border: "border-gray-200 hover:border-gray-300",
-            bg: "bg-white",
-            iconBg: "bg-gray-100 text-gray-500",
-            text: "text-gray-900",
-            subtext: "text-gray-500"
-        }
+        blue: { border: "border-blue-200", icon: "text-blue-600", bg: "bg-blue-50", shadow: "hover:shadow-blue-200/50" },
+        green: { border: "border-green-200", icon: "text-green-600", bg: "bg-green-50", shadow: "hover:shadow-green-200/50" },
+        amber: { border: "border-amber-200", icon: "text-amber-600", bg: "bg-amber-50", shadow: "hover:shadow-amber-200/50" },
+        red: { border: "border-red-200", icon: "text-red-600", bg: "bg-red-50", shadow: "hover:shadow-red-200/50" },
+        gray: { border: "border-gray-200", icon: "text-gray-500", bg: "bg-gray-50", shadow: "hover:shadow-gray-200/50" }
     }
 
     const style = colorStyles[colorKey as keyof typeof colorStyles] || colorStyles.gray
@@ -451,21 +445,25 @@ const StatCard = ({ title, value, description, icon, accentColor = "gray", alert
     return (
         <div
             onClick={onClick}
-            className={`group relative overflow-hidden rounded-xl border p-4 md:p-6 transition-all hover:shadow-lg cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${style.border} ${style.bg}`}
+            className={`group relative overflow-hidden rounded-[2rem] border ${style.border} p-5 transition-all hover:shadow-xl cursor-pointer ${style.bg} hover:-translate-y-1 active:scale-95 shadow-sm ${style.shadow}`}
         >
-            <div className="flex items-center justify-between">
-                <div className={`rounded-lg p-1.5 md:p-2 ${style.iconBg}`}>
-                    {icon && <div className="h-4 w-4 md:h-5 md:w-5">{icon}</div>}
-                </div>
+            {/* Clean Corner Icon (No background box) */}
+            <div className={`absolute top-4 right-4 sm:top-5 sm:right-5 ${style.icon} flex items-center justify-center transition-transform group-hover:scale-125 duration-300`}>
+                {icon && <div className="h-5 w-5 sm:h-6 sm:w-6">{icon}</div>}
             </div>
-            <div className="mt-3 md:mt-4">
-                <h3 className={`text-[10px] md:text-sm font-medium uppercase tracking-wide md:normal-case ${style.subtext}`}>{title}</h3>
-                <div className="mt-1 md:mt-2 flex items-baseline gap-2">
-                    <span className={`text-xl md:text-3xl font-bold tracking-tight ${style.text}`}>
-                        {value}
-                    </span>
+
+            <div className="flex flex-col relative h-full">
+                <div>
+                    <h3 className={`text-[11px] font-bold uppercase tracking-widest opacity-70 ${style.icon} mb-1 pr-12`}>
+                        {title}
+                    </h3>
+                    <div className="flex items-baseline gap-2">
+                        <span className={`text-3xl font-black tracking-tight text-gray-900 group-hover:scale-105 transition-transform origin-left duration-300`}>
+                            {value}
+                        </span>
+                    </div>
                 </div>
-                <p className={`mt-0.5 md:mt-1 text-[10px] md:text-xs line-clamp-1 ${style.subtext}`}>{description}</p>
+                <p className={`mt-auto text-[10px] font-medium text-gray-400 uppercase tracking-tight pt-1`}>{description}</p>
             </div>
         </div>
     )

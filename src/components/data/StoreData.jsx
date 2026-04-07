@@ -203,7 +203,7 @@ export default function StoreData() {
                 const finalRemarks = batchRemarks ? batchRemarks : task.remarks
 
                 const updateData = {
-                    status: 'pending_approval',
+                    status: task.freq === 'one-time' ? 'Yes' : 'pending_approval',
                     remarks: finalRemarks,
                     uploaded_image: task.uploaded_image,
                     actual: new Date().toISOString()
