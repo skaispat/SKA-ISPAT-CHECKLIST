@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { CheckSquare, ClipboardList, Menu, Database, KeyRound, Video, Settings, ListTodo, FileCheck, Calendar, User, Share2 } from 'lucide-react'
 import Sidebar from "./Sidebar"
+import { DATA_DEPARTMENTS } from "../../constants/departments"
 
 export default function AdminLayout({ children }) {
   const location = useLocation()
@@ -37,17 +38,7 @@ export default function AdminLayout({ children }) {
   }
 
   // Filter dataCategories based on user role
-  const dataCategories = [
-    { id: "housekeeping", name: "HouseKeeping", link: "/dashboard/data/housekeeping" },
-    { id: "store", name: "Store", link: "/dashboard/data/store" },
-    { id: "account", name: "Account", link: "/dashboard/data/account" },
-    { id: "admin", name: "Admin", link: "/dashboard/data/admin" },
-    { id: "security", name: "Security", link: "/dashboard/data/security" },
-    // { id: "slag-crusher", name: "Slag Crusher", link: "/dashboard/data/slag-crusher" },
-    { id: "hr", name: "HR", link: "/dashboard/data/hr" },
-    { id: "mgmt", name: "MGMT", link: "/dashboard/data/mgmt" },
-    { id: "health-and-safety", name: "Health and Safety", link: "/dashboard/data/health-and-safety" },
-  ]
+  const dataCategories = DATA_DEPARTMENTS
 
 
 

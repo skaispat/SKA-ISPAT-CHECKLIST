@@ -39,6 +39,13 @@ export default function Sidebar({
     const visibleDepartments = userRole === 'admin'
         ? departments
         : departments.filter(d => {
+            const accessStr = sessionStorage.getItem('user_access') || ''
+            const permissions = accessStr.split(',').map(p => p.trim())
+
+            // 1. Check for explicit department access (new multi-dept system)
+            if (permissions.includes(`dept:${d.id}`)) return true
+
+            // 2. Check for primary department access (default/fallback)
             if (!userDept) return false
             const normalizedUserDept = userDept.toLowerCase().trim()
             const normalizedCatName = d.name.toLowerCase().trim()

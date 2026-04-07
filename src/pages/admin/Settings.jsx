@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react"
 import AdminLayout from "../../components/layout/AdminLayout"
 import { supabase } from "../../supabase"
-import { User, Lock, Save, UserPlus, Edit2, X, Search, Eye, EyeOff, AlertTriangle, Phone } from 'lucide-react'
+import { User, Lock, Save, UserPlus, Edit2, X, Search, Eye, EyeOff, AlertTriangle, Phone, ChevronRight } from 'lucide-react'
 import Toast from "../../components/Toast"
+import { DATA_DEPARTMENTS } from "../../constants/departments"
 
 const AVAILABLE_PAGES = [
     { id: 'dashboard', label: 'Dashboard' },
@@ -113,7 +114,7 @@ export default function Settings() {
             dept_id: user.dept_id,
             mobile_number: user.mobile_number || "",
             user_access: user.user_access === 'all'
-                ? AVAILABLE_PAGES.map(p => p.id)
+                ? [...AVAILABLE_PAGES.map(p => p.id), ...DATA_DEPARTMENTS.map(d => `dept:${d.id}`)]
                 : (user.user_access ? user.user_access.split(',') : [])
         })
         setIsEditing(true)
@@ -179,7 +180,7 @@ export default function Settings() {
                 throw new Error("Mobile number must be exactly 10 digits")
             }
 
-            const userAccessString = (formData.user_access?.length === AVAILABLE_PAGES.length)
+            const userAccessString = (formData.user_access?.filter(id => !id.startsWith('dept:')).length === AVAILABLE_PAGES.length)
                 ? 'all'
                 : (formData.user_access || []).join(',')
 
@@ -240,14 +241,6 @@ export default function Settings() {
         <AdminLayout>
             <div className="max-w-6xl mx-auto space-y-8 p-4 md:p-8 animate-in fade-in duration-500">
                 {/* Header */}
-                {/* <div className="flex flex-col gap-1">
-                    <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Admin Settings</h1>
-                    <p className="text-gray-500">
-                        Manage system users, departments, and permissions.
-                    </p>
-                </div> */}
-
-
                 {/* User Management Section (Admin Only) */}
                 {userRole === "admin" && (
                     <div className="space-y-6">
@@ -431,26 +424,72 @@ export default function Settings() {
                                                 </div>
                                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                                     {AVAILABLE_PAGES.map((page) => (
-                                                        <label key={page.id} className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
-                                                            <div className="relative flex items-center">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="peer h-4 w-4 rounded border-gray-300 text-[#991B1B] focus:ring-[#991B1B]/20"
-                                                                    checked={formData.user_access?.includes(page.id)}
-                                                                    onChange={(e) => {
-                                                                        const currentAccess = formData.user_access || [];
-                                                                        let newAccess;
-                                                                        if (e.target.checked) {
-                                                                            newAccess = [...currentAccess, page.id];
-                                                                        } else {
-                                                                            newAccess = currentAccess.filter(id => id !== page.id);
-                                                                        }
-                                                                        setFormData({ ...formData, user_access: newAccess });
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                            <span className="text-sm text-gray-700">{page.label}</span>
-                                                        </label>
+                                                        <div key={page.id} className="space-y-3">
+                                                            <label className="flex items-center gap-2 p-2 rounded-lg border border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors">
+                                                                <div className="relative flex items-center">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="peer h-4 w-4 rounded border-gray-300 text-[#991B1B] focus:ring-[#991B1B]/20"
+                                                                        checked={formData.user_access?.includes(page.id)}
+                                                                        onChange={(e) => {
+                                                                            const currentAccess = formData.user_access || [];
+                                                                            let newAccess;
+                                                                            if (e.target.checked) {
+                                                                                newAccess = [...currentAccess, page.id];
+                                                                                // If data_pages is checked, also auto-check their own department
+                                                                                if (page.id === 'data_pages' && formData.dept_id) {
+                                                                                    const dept = departments.find(d => d.dept_id.toString() === formData.dept_id.toString());
+                                                                                    if (dept) {
+                                                                                        const matchingDataDept = DATA_DEPARTMENTS.find(dd => dd.name.toLowerCase().includes(dept.dept_name.toLowerCase()) || dept.dept_name.toLowerCase().includes(dd.name.toLowerCase()));
+                                                                                        if (matchingDataDept && !newAccess.includes(`dept:${matchingDataDept.id}`)) {
+                                                                                            newAccess.push(`dept:${matchingDataDept.id}`);
+                                                                                        }
+                                                                                    }
+                                                                                }
+                                                                            } else {
+                                                                                newAccess = currentAccess.filter(id => id !== page.id);
+                                                                                // If data_pages is unchecked, maybe clear depts? User might want to keep them if they re-enable, so let's keep them.
+                                                                            }
+                                                                            setFormData({ ...formData, user_access: newAccess });
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                                <span className="text-sm text-gray-700">{page.label}</span>
+                                                            </label>
+
+                                                            {/* Nested Department Pages */}
+                                                            {page.id === 'data_pages' && formData.user_access?.includes('data_pages') && (
+                                                                <div className="ml-6 grid grid-cols-1 gap-2 border-l-2 border-gray-100 pl-4 py-2">
+                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Grant Department Access</p>
+                                                                    {DATA_DEPARTMENTS.map((dept) => {
+                                                                        const userPrimaryDept = departments.find(d => d.dept_id.toString() === formData.dept_id?.toString());
+                                                                        const isPrimary = userPrimaryDept && (dept.name.toLowerCase().includes(userPrimaryDept.dept_name.toLowerCase()) || userPrimaryDept.dept_name.toLowerCase().includes(dept.name.toLowerCase()));
+                                                                        
+                                                                        return (
+                                                                            <label key={dept.id} className={`flex items-center gap-2 py-1 transition-colors ${isPrimary ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:text-[#991B1B]'}`}>
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    className="h-3.5 w-3.5 rounded border-gray-300 text-[#991B1B] focus:ring-[#991B1B]/10 disabled:opacity-50"
+                                                                                    checked={isPrimary || formData.user_access?.includes(`dept:${dept.id}`)}
+                                                                                    disabled={isPrimary}
+                                                                                    onChange={(e) => {
+                                                                                        const currentAccess = formData.user_access || [];
+                                                                                        let newAccess;
+                                                                                        if (e.target.checked) {
+                                                                                            newAccess = [...currentAccess, `dept:${dept.id}`];
+                                                                                        } else {
+                                                                                            newAccess = currentAccess.filter(id => id !== `dept:${dept.id}`);
+                                                                                        }
+                                                                                        setFormData({ ...formData, user_access: newAccess });
+                                                                                    }}
+                                                                                />
+                                                                                <span className="text-xs text-gray-600">{dept.name} {isPrimary && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-1 font-medium italic">Own Dept</span>}</span>
+                                                                            </label>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     ))}
                                                 </div>
                                             </div>
