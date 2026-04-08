@@ -204,7 +204,7 @@ export default function AdminData() {
                 const finalRemarks = batchRemarks ? batchRemarks : task.remarks
 
                 const updateData = {
-                    status: task.freq === 'one-time' ? 'Yes' : 'pending_approval',
+                    status: 'pending_approval',
                     remarks: finalRemarks,
                     uploaded_image: task.uploaded_image,
                     actual: new Date().toISOString()

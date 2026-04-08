@@ -53,6 +53,7 @@ export default function AdminApproval() {
             let query = supabase
                 .from("master_tasks")
                 .select("*")
+                .neq("freq", "one-time")
 
             if (activeTab === 'pending') {
                 query = query.eq("status", "pending_approval")

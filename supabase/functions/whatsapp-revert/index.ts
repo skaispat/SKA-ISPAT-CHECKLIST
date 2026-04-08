@@ -16,10 +16,16 @@ serve(async (req) => {
     const record = payload.record
     const old_record = payload.old_record
 
-    // 1. Logic check: ONLY trigger if 'actual' date was added (submission)
-    if (!record.actual || old_record?.actual) {
-      console.log("Skipping: Not a new submission (actual date already existed or is still empty)")
-      return new Response(JSON.stringify({ message: "Not a new submission" }), { status: 200 })
+    // 1. Logic check: Trigger on FIRST submission OR on re-submission after correction
+    // First submission: 'actual' was null, now has a value
+    const isFirstSubmission = !old_record?.actual && record.actual
+
+    // Re-submission: status was 'pending' (Needs Correction), now 'pending_approval' (Submitted)
+    const isResubmission = old_record?.status === 'pending' && record.status === 'pending_approval'
+
+    if (!isFirstSubmission && !isResubmission) {
+      console.log("Skipping: Not a new submission or re-submission after correction")
+      return new Response(JSON.stringify({ message: "Skipping" }), { status: 200 })
     }
 
     // 3. Logic check: ONLY for 'one-time' tasks as requested
