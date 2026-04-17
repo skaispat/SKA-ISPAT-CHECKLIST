@@ -86,13 +86,13 @@ export default function MGMTData() {
             const { data: deptData, error: deptError } = await supabase
                 .from('departments')
                 .select('dept_name')
-                .ilike('dept_name', 'MGMT')
+                .ilike('dept_name', 'MANAGEMENT')
                 .single()
 
             if (deptError) throw deptError
 
             if (!deptData) {
-                console.error("MGMT department not found")
+                console.error("Management department not found")
                 setLoading(false)
                 return
             }
@@ -399,7 +399,7 @@ export default function MGMTData() {
                 {/* Header Actions */}
                 <div className="flex flex-col sm:flex-row gap-6 justify-between items-start sm:items-center pb-6">
                     <div>
-                        <h1 className="text-2xl font-semibold tracking-tight text-foreground">MGMT Records</h1>
+                        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Management Records</h1>
                     </div>
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         {isAdmin && (
@@ -831,7 +831,7 @@ export default function MGMTData() {
                                             <span>Given By:</span>
                                             <span className="font-medium text-foreground truncate">{task.given_by_username}</span>
                                         </div>
-                                     </div>
+                                    </div>
 
                                     {activeTab !== 'history' && (
                                         <div className="pt-2 flex items-center gap-3 border-t border-border/30">
@@ -1427,7 +1427,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
 
         setIsSubmitting(true)
         try {
-            const department = tasks[0]?.department || 'MGMT'
+            const department = tasks[0]?.department || 'MANAGEMENT'
 
             const { data, error } = await supabase
                 .from('master_tasks')
@@ -1458,7 +1458,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
 
     // Filter tasks that will be deleted based on current selection
     const tasksToDelete = selectedTitle
-        ? tasks.filter(t => t.task_title === selectedTitle && t.department === (tasks[0]?.department || 'MGMT'))
+        ? tasks.filter(t => t.task_title === selectedTitle && t.department === (tasks[0]?.department || 'MANAGEMENT'))
         : []
 
     const handleDeleteClick = () => {
@@ -1468,7 +1468,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
     const confirmDelete = async () => {
         setIsSubmitting(true)
         try {
-            const department = tasks[0]?.department || 'MGMT'
+            const department = tasks[0]?.department || 'MANAGEMENT'
 
             const { error } = await supabase
                 .from('master_tasks')

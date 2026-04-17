@@ -244,11 +244,25 @@ export default function AssignTask() {
         const selectedDept = rawDepartmentsData.find(d => d.dept_name === formData.department);
         if (!selectedDept) return [];
 
-        return doerOptions.filter(user =>
+        let options = doerOptions.filter(user =>
             user.dept_id === selectedDept.dept_id &&
             user.full_name !== "Abhishek Agrawal (MD)" &&
             user.full_name !== "Abhishek Agrawal"
         );
+
+        // Special case: Add Pawan Tiwari to Management/MGMT
+        const isManagement = formData.department.toUpperCase() === "MANAGEMENT" ||
+            formData.department.toUpperCase() === "MGMT";
+
+        if (isManagement) {
+            const pawan = doerOptions.find(u => u.full_name === "Pawan Tiwari");
+            // Ensure he's added if not already in the list
+            if (pawan && !options.some(u => u.full_name === "Pawan Tiwari")) {
+                options = [...options, pawan];
+            }
+        }
+
+        return options;
     })();
 
 
