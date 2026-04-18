@@ -11,6 +11,7 @@ const AVAILABLE_PAGES = [
     { id: 'assign_task', label: 'Assign Task' },
     { id: 'admin_approval', label: 'Admin Approval' },
     { id: 'delegated_tasks', label: 'Delegated Tasks' },
+    { id: 'mill_gate_pass', label: 'Mill Gate Pass' },
     { id: 'data_pages', label: 'Department / Data Pages' },
     { id: 'profile', label: 'My Profile' },
     { id: 'settings', label: 'Settings' },

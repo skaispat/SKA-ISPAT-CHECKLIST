@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
-import { CheckSquare, ClipboardList, Menu, Database, KeyRound, Video, Settings, ListTodo, FileCheck, Calendar, User, Share2 } from 'lucide-react'
+import { CheckSquare, ClipboardList, Menu, Database, KeyRound, Video, Settings, ListTodo, FileCheck, Calendar, User, Share2, DoorOpen } from 'lucide-react'
 import Sidebar from "./Sidebar"
 import { DATA_DEPARTMENTS } from "../../constants/departments"
 
@@ -59,7 +59,7 @@ export default function AdminLayout({ children }) {
       label: "My Tasks",
       icon: ListTodo,
       active: location.pathname === "/dashboard/user/tasks",
-      showFor: ["user"], 
+      showFor: ["user"],
       permission: "tasks"
     },
     {
@@ -85,6 +85,14 @@ export default function AdminLayout({ children }) {
       active: location.pathname === "/dashboard/delegated-tasks",
       showFor: ["admin", "user"],
       permission: "delegated_tasks"
+    },
+    {
+      href: "/dashboard/mill-gate-pass",
+      label: "Mill Gate Pass",
+      icon: DoorOpen,
+      active: location.pathname === "/dashboard/mill-gate-pass",
+      showFor: ["admin", "user"],
+      permission: "mill_gate_pass"
     },
     {
       href: "#",

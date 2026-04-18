@@ -15,6 +15,7 @@ import DelegatedTask from "./pages/user/DelegatedTask"
 import UserDashboard from "./pages/user/Dashboard"
 import UserTasks from "./pages/user/Tasks"
 import CalendarPage from "./pages/CalendarPage"
+import MillGatePass from "./pages/MillGatePass"
 
 import HouseKeepingData from "./components/data/HouseKeepingData"
 import StoreData from "./components/data/StoreData"
@@ -140,7 +141,7 @@ function App() {
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/dashboard" element={<DashboardRedirect />} />
-        
+
         <Route
           path="/dashboard/admin"
           element={
@@ -316,6 +317,15 @@ function App() {
           element={
             <ProtectedRoute requiredPermission="dashboard">
               <CalendarPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/dashboard/mill-gate-pass"
+          element={
+            <ProtectedRoute requiredPermission="dashboard">
+              <MillGatePass />
             </ProtectedRoute>
           }
         />

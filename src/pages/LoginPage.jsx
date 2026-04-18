@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "../supabase"
-import sarthakLogo from "../assets/sarthak_logo.jpg"
+import sarthakLogo from "../assets/skalogo.png"
 import { Eye, EyeOff } from 'lucide-react'
 
 const LoginPage = () => {
@@ -103,7 +103,7 @@ const LoginPage = () => {
           {/* Header */}
           <div className="text-center mb-10">
             <div className="flex items-center justify-center mb-5">
-              <img src="/sarthak_logo.jpg" alt="Sarthak Logo" className="h-16 w-auto object-contain" />
+              <img src="/skalogo.png" alt="Sarthak Logo" className="h-16 w-auto object-contain" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Welcome Back</h1>
             <p className="text-sm text-gray-500 mt-2.5 font-medium">Sign in to Sarthak TMT Checklist Portal</p>
