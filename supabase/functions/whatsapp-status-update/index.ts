@@ -38,7 +38,7 @@ serve(async (req) => {
 
     // Prepare display values for template
     const statusText = isApproval ? "Approved" : "Needs Correction"
-    const remarks = record.remarks || (isApproval ? "Task completed successfully." : "Please review the task details for corrections.")
+    const remarks = isApproval ? "Approved" : (record.admin_remark || "Please review the task details for corrections.")
     const assignerName = record.given_by_username || "Assigner"
 
     // Prepare Phone Number
@@ -55,6 +55,7 @@ serve(async (req) => {
     const response = await fetch(WHATSAPP_ENDPOINT, {
       method: 'POST',
       headers: {
+
         'Authorization': `Bearer ${WHATSAPP_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
       },

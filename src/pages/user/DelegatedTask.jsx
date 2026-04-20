@@ -111,14 +111,14 @@ export default function DelegatedTask() {
             setProcessingId(task.task_id)
             const { error } = await supabase
                 .from("master_tasks")
-                .update({ status: "Yes" })
+                .update({ status: "Yes", admin_remark: "Approved" })
                 .eq("task_id", task.task_id)
 
             if (error) throw error
 
             // Update local state
             setTasks(prev => prev.map(t =>
-                t.task_id === task.task_id ? { ...t, db_status: "Yes", status: "Yes" } : t
+                t.task_id === task.task_id ? { ...t, db_status: "Yes", status: "Yes", admin_remark: "Approved" } : t
             ))
         } catch (error) {
             console.error("Error approving task:", error)
@@ -147,7 +147,7 @@ export default function DelegatedTask() {
                 .from("master_tasks")
                 .update({
                     status: "pending",
-                    remarks: rejectionReason
+                    admin_remark: rejectionReason
                 })
                 .eq("task_id", selectedTaskToReject.task_id)
 
@@ -155,7 +155,7 @@ export default function DelegatedTask() {
 
             setTasks(prev => prev.map(t =>
                 t.task_id === selectedTaskToReject.task_id
-                    ? { ...t, db_status: "pending", status: "pending", remarks: rejectionReason }
+                    ? { ...t, db_status: "pending", status: "pending", admin_remark: rejectionReason }
                     : t
             ))
             setRejectModalOpen(false)
@@ -395,7 +395,8 @@ export default function DelegatedTask() {
                                         <th className="px-6 py-4">Assignee</th>
                                         <th className="px-6 py-4">Assigned By</th>
                                         <th className="px-6 py-4 min-w-[300px]">Task Details</th>
-                                        <th className="px-6 py-4 min-w-[200px]">Remarks</th>
+                                        <th className="px-6 py-4 min-w-[200px]">User Remarks</th>
+                                        <th className="px-6 py-4 min-w-[200px]">Admin Remarks</th>
                                         <th className="px-6 py-4 text-center">Attachment</th>
                                         <th className="px-6 py-4">Department</th>
                                     </tr>
@@ -403,7 +404,7 @@ export default function DelegatedTask() {
                                 <tbody className="divide-y divide-gray-100">
                                     {loading ? (
                                         <tr>
-                                            <td colSpan="8" className="px-6 py-10 text-center">
+                                            <td colSpan="10" className="px-6 py-10 text-center">
                                                 <div className="flex items-center justify-center gap-2 text-gray-400">
                                                     <Loader2 className="h-4 w-4 animate-spin" />
                                                     Loading tasks...
@@ -412,7 +413,7 @@ export default function DelegatedTask() {
                                         </tr>
                                     ) : currentItems.length === 0 ? (
                                         <tr>
-                                            <td colSpan="8" className="px-6 py-10 text-center text-gray-400">
+                                            <td colSpan="10" className="px-6 py-10 text-center text-gray-400">
                                                 No tasks found in this category.
                                             </td>
                                         </tr>
@@ -471,6 +472,9 @@ export default function DelegatedTask() {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <p className="text-xs text-gray-600 whitespace-normal italic">{task.remarks || "-"}</p>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <p className="text-xs text-amber-700 whitespace-normal italic font-medium">{task.admin_remark || "-"}</p>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
                                                     {task.uploaded_image ? (
@@ -555,11 +559,21 @@ export default function DelegatedTask() {
 
                                             {/* Remarks (Mobile) */}
                                             {task.remarks && (
+                                                <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100/50">
+                                                    <div className="text-[10px] uppercase font-black text-blue-600 tracking-wider mb-1 flex items-center gap-1">
+                                                        User Remark
+                                                    </div>
+                                                    <p className="text-xs text-blue-800 italic break-words">{task.remarks}</p>
+                                                </div>
+                                            )}
+
+                                            {/* Admin Remarks (Mobile) */}
+                                            {task.admin_remark && (
                                                 <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-100/50">
                                                     <div className="text-[10px] uppercase font-black text-amber-600 tracking-wider mb-1 flex items-center gap-1">
-                                                        Remark
+                                                        Admin Remark
                                                     </div>
-                                                    <p className="text-xs text-amber-800 italic break-words">{task.remarks}</p>
+                                                    <p className="text-xs text-amber-800 italic break-words">{task.admin_remark}</p>
                                                 </div>
                                             )}
 

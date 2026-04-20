@@ -79,7 +79,7 @@ export default function AdminApproval() {
             setProcessingId(task.task_id)
             const { error } = await supabase
                 .from("master_tasks")
-                .update({ status: "Yes" })
+                .update({ status: "Yes", admin_remark: "Approved" })
                 .eq("task_id", task.task_id)
 
             if (error) throw error
@@ -109,9 +109,7 @@ export default function AdminApproval() {
                 .from("master_tasks")
                 .update({
                     status: "rejected",
-                    remarks: rejectionReason ? `[Rejected: ${rejectionReason}] ${selectedTaskToReject.remarks || ''}` : selectedTaskToReject.remarks
-                    // Appending rejection reason to remarks so user can see it, 
-                    // assumes we don't have a separate rejection_reason column.
+                    admin_remark: rejectionReason
                 })
                 .eq("task_id", selectedTaskToReject.task_id)
 
@@ -257,6 +255,7 @@ export default function AdminApproval() {
                                         <th className="px-6 py-4">Start Date</th>
                                         <th className="px-6 py-4">Submission Time</th>
                                         <th className="px-6 py-4">Proof</th>
+                                        <th className="px-6 py-4">Admin Remarks</th>
                                         <th className="px-6 py-4 text-right">
                                             {activeTab === 'pending' ? 'Actions' : 'Status'}
                                         </th>
@@ -309,6 +308,15 @@ export default function AdminApproval() {
                                                     </a>
                                                 ) : (
                                                     <span className="text-gray-400 text-xs italic">No attachment</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 align-top">
+                                                {task.admin_remark ? (
+                                                    <div className="p-2 bg-amber-50 rounded text-xs text-amber-700 border border-amber-100">
+                                                        {task.admin_remark}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-400 text-xs italic">-</span>
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 align-top text-right">
@@ -365,6 +373,12 @@ export default function AdminApproval() {
                                     {task.remarks && (
                                         <div className="p-2 bg-gray-50 rounded text-xs text-gray-600 border border-gray-100">
                                             <span className="font-semibold">User Note:</span> {task.remarks}
+                                        </div>
+                                    )}
+
+                                    {task.admin_remark && (
+                                        <div className="p-2 bg-amber-50 rounded text-xs text-amber-700 border border-amber-100">
+                                            <span className="font-semibold">Admin Remark:</span> {task.admin_remark}
                                         </div>
                                     )}
 

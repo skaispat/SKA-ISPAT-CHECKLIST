@@ -445,6 +445,12 @@ export default function UserTasks() {
                                 </p>
                                 <p className="text-gray-500 text-xs line-clamp-2">{task.task_description}</p>
 
+                                {((task.status === 'rejected' || task.status === 'pending') && task.admin_remark) && (
+                                  <div className="mt-2 p-2 bg-amber-50 rounded text-xs text-amber-700 border border-amber-100">
+                                    <span className="font-semibold">Correction Note:</span> {task.admin_remark}
+                                  </div>
+                                )}
+
                                 {/* Rejected Info Inline */}
                                 {task.status === 'rejected' && task.remarks && (
                                   <div className="mt-2 p-2 bg-red-50 rounded text-xs text-red-600 border border-red-100">
@@ -511,6 +517,12 @@ export default function UserTasks() {
                             {task.task_title}
                           </h3>
                           <p className="text-sm text-gray-500 line-clamp-2">{task.task_description}</p>
+
+                          {((task.status === 'rejected' || task.status === 'pending') && task.admin_remark) && (
+                            <div className="p-2 bg-amber-50 rounded text-xs text-amber-700 border border-amber-100">
+                              <span className="font-semibold">Correction Note:</span> {task.admin_remark}
+                            </div>
+                          )}
 
                           {task.status === 'rejected' && task.remarks && (
                             <div className="p-2 bg-red-50 rounded text-xs text-red-600 border border-red-100">

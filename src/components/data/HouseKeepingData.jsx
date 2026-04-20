@@ -171,7 +171,6 @@ export default function HouseKeepingData() {
         setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, ...updates } : t))
     }
 
-    const [isBatchConfirmOpen, setIsBatchConfirmOpen] = useState(false)
 
     const handleBatchSubmit = () => {
         // Validation: Check for required attachments
@@ -196,7 +195,7 @@ export default function HouseKeepingData() {
             return;
         }
 
-        setIsBatchConfirmOpen(true)
+        confirmBatchSubmit()
     }
 
     const confirmBatchSubmit = async (batchRemarks) => {
@@ -226,7 +225,6 @@ export default function HouseKeepingData() {
             await Promise.all(updates)
             await fetchTasks()
             setSelectedRows(new Set())
-            setIsBatchConfirmOpen(false)
         } catch (err) {
             console.error("Error batch submitting:", err)
             alert("Failed to submit tasks")
@@ -645,19 +643,20 @@ export default function HouseKeepingData() {
                                     <th className="px-4 py-3 whitespace-nowrap font-medium text-center">Attachment</th>
                                     {activeTab !== 'history' && <th className="px-4 py-3 whitespace-nowrap min-w-[150px] font-medium">Status</th>}
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[200px] font-medium">Remarks</th>
+                                    <th className="px-4 py-3 whitespace-nowrap min-w-[200px] font-medium text-amber-600">Admin Remarks</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Image</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/30">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan="14" className="px-4 py-8 text-center text-muted-foreground">
+                                        <td colSpan="15" className="px-4 py-8 text-center text-muted-foreground">
                                             Loading data...
                                         </td>
                                     </tr>
                                 ) : filteredTasks.length === 0 ? (
                                     <tr>
-                                        <td colSpan="14" className="px-4 py-8 text-center text-muted-foreground">
+                                        <td colSpan="15" className="px-4 py-8 text-center text-muted-foreground">
                                             No tasks found.
                                         </td>
                                     </tr>
@@ -775,6 +774,9 @@ export default function HouseKeepingData() {
                                                             } focus:outline-none placeholder:text-muted-foreground/40`}
                                                     />
                                                 )}
+                                            </td>
+                                            <td className="px-4 py-3 text-muted-foreground">
+                                                <span className="text-xs line-clamp-2 max-w-[200px] text-amber-700/80 font-medium" title={task.admin_remark}>{task.admin_remark || '-'}</span>
                                             </td>
                                             <td className={`px-4 py-3 text-muted-foreground ${activeTab !== 'history' ? 'min-w-[200px]' : ''}`}>
                                                 <div className="flex flex-col gap-2">
@@ -940,6 +942,13 @@ export default function HouseKeepingData() {
                                         </div>
                                     )}
 
+                                    {task.admin_remark && (
+                                        <div className="mt-2 p-2 bg-amber-50/50 rounded-lg text-[10px] text-amber-700 border border-amber-100/50">
+                                            <span className="font-semibold uppercase tracking-wider text-[9px]">Admin Remark:</span>
+                                            <p className="mt-0.5">{task.admin_remark}</p>
+                                        </div>
+                                    )}
+
                                     <div className="flex items-center justify-between pt-1">
                                         <div className="flex gap-3">
                                             {task.uploaded_image && (
@@ -1044,14 +1053,6 @@ export default function HouseKeepingData() {
                 )}
 
                 {/* Batch Confirm Modal */}
-                {isBatchConfirmOpen && (
-                    <BatchConfirmModal
-                        count={selectedRows.size}
-                        onClose={() => setIsBatchConfirmOpen(false)}
-                        onConfirm={confirmBatchSubmit}
-                        loading={loading}
-                    />
-                )}
 
                 {/* Edit Info Modal */}
                 {isEditTaskOpen && (
@@ -1162,14 +1163,15 @@ function HistoryModal({ task, onClose }) {
                                 <th className="px-4 py-3 font-medium text-left">Submitter</th>
                                 <th className="px-4 py-3 font-medium text-center">Status</th>
                                 <th className="px-4 py-3 font-medium text-left">Remarks</th>
+                                <th className="px-4 py-3 font-medium text-left text-amber-600">Admin Remarks</th>
                                 <th className="px-4 py-3 font-medium text-left">Actual Time</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border/30">
                             {loading ? (
-                                <tr><td colSpan="7" className="p-8 text-center text-muted-foreground animate-pulse">Loading history...</td></tr>
+                                <tr><td colSpan="8" className="p-8 text-center text-muted-foreground animate-pulse">Loading history...</td></tr>
                             ) : filteredHistory.length === 0 ? (
-                                <tr><td colSpan="7" className="p-8 text-center text-muted-foreground">No history records found.</td></tr>
+                                <tr><td colSpan="8" className="p-8 text-center text-muted-foreground">No history records found.</td></tr>
                             ) : (
                                 filteredHistory.map(item => (
                                     <tr key={item.task_id} className="hover:bg-muted/20 transition-all duration-200">
@@ -1200,6 +1202,7 @@ function HistoryModal({ task, onClose }) {
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 max-w-xs text-muted-foreground text-xs leading-relaxed">{item.remarks || '-'}</td>
+                                        <td className="px-4 py-3 max-w-xs text-amber-700/80 text-xs leading-relaxed font-medium">{item.admin_remark || '-'}</td>
                                         <td className="px-4 py-3 text-muted-foreground text-xs font-mono">{item.actual ? (() => {
                                             const d = new Date(item.actual)
                                             return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
@@ -1380,60 +1383,6 @@ function SubmitTaskModal({ task, onClose }) {
     )
 }
 
-function BatchConfirmModal({ count, onClose, onConfirm, loading }) {
-    const [remarks, setRemarks] = useState("")
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-background rounded-xl shadow-xl w-full max-w-sm overflow-hidden border border-border/50">
-                <div className="p-6 text-center space-y-4">
-                    <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
-                        <CheckCircle2 className="h-6 w-6 text-primary" />
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-semibold text-foreground">Confirm Submission</h2>
-                        <p className="text-sm text-muted-foreground mt-1">
-                            Are you sure you want to submit {count} selected {count === 1 ? 'task' : 'tasks'} for approval?
-                        </p>
-                    </div>
-                    <div className="text-left w-full">
-                        <label className="text-xs font-medium text-muted-foreground block mb-1">Remarks (Optional)</label>
-                        <textarea
-                            value={remarks}
-                            onChange={(e) => setRemarks(e.target.value)}
-                            placeholder="Add a remark for these tasks..."
-                            className="w-full text-sm rounded-lg border border-border bg-muted/20 p-2 focus:ring-1 focus:ring-primary focus:border-primary outline-none min-h-[80px]"
-                        />
-                    </div>
-                </div>
-
-                <div className="flex gap-3 p-4 bg-muted/30 border-t border-border/50">
-                    <button
-                        onClick={onClose}
-                        disabled={loading}
-                        className="flex-1 px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm rounded-lg transition-all border border-transparent hover:border-border disabled:opacity-50"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={() => onConfirm(remarks)}
-                        disabled={loading}
-                        className="flex-1 px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                        {loading ? (
-                            <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Submitting...
-                            </>
-                        ) : (
-                            'Submit'
-                        )}
-                    </button>
-                </div>
-            </div>
-        </div>
-    )
-}
 
 function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
     const [selectedEmployee, setSelectedEmployee] = useState("")
