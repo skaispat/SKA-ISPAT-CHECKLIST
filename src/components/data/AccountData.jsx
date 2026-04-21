@@ -203,7 +203,7 @@ export default function AccountData() {
                 const finalRemarks = batchRemarks ? batchRemarks : task.remarks
 
                 const updateData = {
-                    status: 'pending_approval',
+                    status: 'Yes',
                     remarks: finalRemarks,
                     uploaded_image: task.uploaded_image,
                     actual: new Date().toISOString()
