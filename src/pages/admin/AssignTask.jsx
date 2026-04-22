@@ -262,6 +262,15 @@ export default function AssignTask() {
             }
         }
 
+        const isHousekeeping = formData.department.toUpperCase() === "HOUSEKEEPING";
+        if (isHousekeeping) {
+            const hari = doerOptions.find(u => u.full_name === "Hari Shankar");
+            // Ensure he's added if not already in the list
+            if (hari && !options.some(u => u.full_name === "Hari Shankar")) {
+                options = [...options, hari];
+            }
+        }
+
         return options;
     })();
 
