@@ -252,6 +252,7 @@ export default function AdminApproval() {
                                         <th className="px-6 py-4">Task Details</th>
                                         <th className="px-6 py-4">User</th>
                                         <th className="px-6 py-4">Department</th>
+                                        <th className="px-6 py-4">Area</th>
                                         <th className="px-6 py-4">Start Date</th>
                                         <th className="px-6 py-4">Submission Time</th>
                                         <th className="px-6 py-4">Proof</th>
@@ -267,7 +268,7 @@ export default function AdminApproval() {
                                             <td className="px-6 py-4 align-top max-w-xs">
                                                 <div className="space-y-1">
                                                     <p className="font-semibold text-gray-900">{task.task_title}</p>
-                                                    <p className="text-gray-500 text-xs line-clamp-2">{task.task_description}</p>
+                                                    <p className="text-gray-500 text-xs">{task.task_description}</p>
                                                     {task.remarks && (
                                                         <div className="mt-2 p-2 bg-gray-50 rounded text-xs text-gray-600 border border-gray-100">
                                                             <span className="font-semibold">User Note:</span> {task.remarks}
@@ -284,6 +285,9 @@ export default function AdminApproval() {
                                                 {task.department}
                                             </td>
                                             <td className="px-6 py-4 align-top whitespace-nowrap text-gray-600">
+                                                {task.location}
+                                            </td>
+                                            <td className="px-6 py-4 align-top whitespace-nowrap text-gray-600">
                                                 <div className="flex items-center gap-1.5">
                                                     <Calendar className="w-3.5 h-3.5 text-gray-400" />
                                                     {formatDate(task.task_start_date)}
@@ -297,15 +301,20 @@ export default function AdminApproval() {
                                             </td>
                                             <td className="px-6 py-4 align-top">
                                                 {task.uploaded_image ? (
-                                                    <a
-                                                        href={task.uploaded_image}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="inline-flex items-center gap-1.5 text-[#991B1B] hover:text-[#7f1d1d] font-medium text-xs hover:underline"
-                                                    >
-                                                        <Eye className="w-3.5 h-3.5" />
-                                                        View Image
-                                                    </a>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {task.uploaded_image.split(',').filter(Boolean).map((url, index) => (
+                                                            <a
+                                                                key={index}
+                                                                href={url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center gap-1.5 text-[#991B1B] hover:text-[#7f1d1d] font-medium text-xs hover:underline"
+                                                            >
+                                                                <Eye className="w-3.5 h-3.5" />
+                                                                View Image {index + 1}
+                                                            </a>
+                                                        ))}
+                                                    </div>
                                                 ) : (
                                                     <span className="text-gray-400 text-xs italic">No attachment</span>
                                                 )}
@@ -363,7 +372,7 @@ export default function AdminApproval() {
                                 <div key={task.task_id} className="p-4 space-y-3">
                                     <div className="flex justify-between items-start">
                                         <div className="space-y-1">
-                                            <div className="font-semibold text-gray-900 line-clamp-2">{task.task_title}</div>
+                                            <div className="font-semibold text-gray-900">{task.task_title}</div>
                                             <div className="text-xs text-gray-500">{task.task_description}</div>
                                         </div>
                                         {activeTab === 'approved' && <span className="shrink-0 inline-flex px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700">Approved</span>}
@@ -387,15 +396,22 @@ export default function AdminApproval() {
                                             <span className="font-medium">User:</span> {task.name}
                                         </div>
                                         <div className="flex items-center gap-1">
+                                            <span className="font-medium">Area:</span> {task.location}
+                                        </div>
+                                        <div className="flex items-center gap-1">
                                             <Calendar size={12} />
                                             <span>{formatDate(task.actual)}</span>
                                         </div>
                                     </div>
 
                                     {task.uploaded_image && (
-                                        <a href={task.uploaded_image} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[#991B1B] font-medium text-xs">
-                                            <Eye className="w-3.5 h-3.5" /> View Proof
-                                        </a>
+                                        <div className="flex flex-col gap-2">
+                                            {task.uploaded_image.split(',').filter(Boolean).map((url, index) => (
+                                                <a key={index} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[#991B1B] font-medium text-xs">
+                                                    <Eye className="w-3.5 h-3.5" /> View Proof {index + 1}
+                                                </a>
+                                            ))}
+                                        </div>
                                     )}
 
                                     {activeTab === 'pending' && (

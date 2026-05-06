@@ -226,6 +226,15 @@ export default function AccountData() {
     const handleFileUpload = async (taskId, file) => {
         if (!file) return
 
+        // Get the current task to see existing images
+        const task = tasks.find(t => t.task_id === taskId)
+        const currentImages = task?.uploaded_image ? task.uploaded_image.split(',').filter(Boolean) : []
+
+        if (currentImages.length >= 3) {
+            alert("Maximum 3 images allowed")
+            return
+        }
+
         // Set uploading state
         setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, isUploading: true } : t))
 
@@ -243,13 +252,23 @@ export default function AccountData() {
                 .from('images')
                 .getPublicUrl(fileName)
 
-            handleLocalUpdate(taskId, { uploaded_image: publicUrl })
+            const updatedImages = [...currentImages, publicUrl].join(',')
+            handleLocalUpdate(taskId, { uploaded_image: updatedImages })
         } catch (err) {
             console.error("Error uploading image:", err)
             alert("Failed to upload image")
         } finally {
             setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, isUploading: false } : t))
         }
+    }
+
+    const handleDeleteImage = (taskId, imageUrl) => {
+        const task = tasks.find(t => t.task_id === taskId)
+        if (!task || !task.uploaded_image) return
+
+        const currentImages = task.uploaded_image.split(',').filter(Boolean)
+        const updatedImages = currentImages.filter(url => url !== imageUrl).join(',')
+        handleLocalUpdate(taskId, { uploaded_image: updatedImages })
     }
 
     // Get unique names for the history filter dropdown
@@ -741,41 +760,54 @@ export default function AccountData() {
                                             </td>
                                             <td className={`px-4 py-3 text-muted-foreground ${activeTab !== 'history' ? 'min-w-[200px]' : ''}`}>
                                                 <div className="flex flex-col gap-2">
-                                                    {task.uploaded_image && (
-                                                        <a
-                                                            href={task.uploaded_image}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 hover:underline"
-                                                        >
-                                                            <Eye className="h-3 w-3" />
-                                                            View
-                                                        </a>
-                                                    )}
+                                                    {task.uploaded_image && task.uploaded_image.split(',').filter(Boolean).map((url, index) => (
+                                                        <div key={index} className="flex items-center gap-2 group/img">
+                                                            <a
+                                                                href={url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 hover:underline"
+                                                            >
+                                                                <Eye className="h-3 w-3" />
+                                                                View {index + 1}
+                                                            </a>
+                                                            {activeTab !== 'history' && selectedRows.has(task.task_id) && (
+                                                                <button
+                                                                    onClick={() => handleDeleteImage(task.task_id, url)}
+                                                                    className="p-1 text-destructive opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-destructive/10 rounded"
+                                                                    title="Delete Image"
+                                                                >
+                                                                    <Trash2 className="h-3 w-3" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
                                                     {activeTab === 'history' ? (
-                                                        null // Hide upload in history
+                                                        null
                                                     ) : task.isUploading ? (
                                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                             <Loader2 className="h-3 w-3 animate-spin" />
                                                             Uploading...
                                                         </div>
                                                     ) : (
-                                                        <div className="relative group/file">
-                                                            <button
-                                                                disabled={!selectedRows.has(task.task_id)}
-                                                                className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                                                            >
-                                                                <Upload className="h-3 w-3" />
-                                                                <span>{task.uploaded_image ? "Change" : "Upload"}</span>
-                                                            </button>
-                                                            <input
-                                                                disabled={!selectedRows.has(task.task_id)}
-                                                                type="file"
-                                                                accept="image/*"
-                                                                onChange={(e) => handleFileUpload(task.task_id, e.target.files?.[0])}
-                                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed text-[0]"
-                                                            />
-                                                        </div>
+                                                        (task.uploaded_image ? task.uploaded_image.split(',').filter(Boolean).length < 3 : true) && (
+                                                            <div className="relative group/file">
+                                                                <button
+                                                                    disabled={!selectedRows.has(task.task_id)}
+                                                                    className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                >
+                                                                    <Upload className="h-3 w-3" />
+                                                                    <span>{task.uploaded_image ? 'Add New' : 'Upload'}</span>
+                                                                </button>
+                                                                <input
+                                                                    disabled={!selectedRows.has(task.task_id)}
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    onChange={(e) => handleFileUpload(task.task_id, e.target.files?.[0])}
+                                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed text-[0]"
+                                                                />
+                                                            </div>
+                                                        )
                                                     )}
                                                 </div>
                                             </td>
@@ -886,29 +918,39 @@ export default function AccountData() {
                                         </div>
                                     )}
 
-                                    <div className="flex items-center justify-between pt-1">
-                                        <div className="flex gap-3">
-                                            {task.uploaded_image && (
-                                                <a
-                                                    href={task.uploaded_image}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-primary"
-                                                >
-                                                    <Eye className="h-3 w-3" />
-                                                    View
-                                                </a>
-                                            )}
+                                    <div className="flex flex-col gap-2 pt-1">
+                                        <div className="flex flex-wrap gap-3">
+                                            {task.uploaded_image && task.uploaded_image.split(',').filter(Boolean).map((url, index) => (
+                                                <div key={index} className="flex items-center gap-2">
+                                                    <a
+                                                        href={url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1.5 text-xs font-medium text-primary"
+                                                    >
+                                                        <Eye className="h-3 w-3" />
+                                                        View {index + 1}
+                                                    </a>
+                                                    {activeTab !== 'history' && selectedRows.has(task.task_id) && (
+                                                        <button
+                                                            onClick={() => handleDeleteImage(task.task_id, url)}
+                                                            className="p-1 text-destructive rounded hover:bg-destructive/10"
+                                                        >
+                                                            <Trash2 className="h-3 w-3" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
                                         <div className="flex gap-3">
-                                            {activeTab !== 'history' && !task.isUploading && (
+                                            {activeTab !== 'history' && !task.isUploading && (task.uploaded_image ? task.uploaded_image.split(',').filter(Boolean).length < 3 : true) && (
                                                 <div className="relative">
                                                     <button
                                                         disabled={!selectedRows.has(task.task_id)}
                                                         className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                                                     >
                                                         <Upload className="h-3 w-3" />
-                                                        {task.uploaded_image ? "Change" : "Upload"}
+                                                        {task.uploaded_image ? 'Add New' : 'Upload'}
                                                     </button>
                                                     <input
                                                         disabled={!selectedRows.has(task.task_id)}

@@ -225,6 +225,15 @@ export default function StoreData() {
     const handleFileUpload = async (taskId, file) => {
         if (!file) return
 
+        // Get the current task to see existing images
+        const task = tasks.find(t => t.task_id === taskId)
+        const currentImages = task?.uploaded_image ? task.uploaded_image.split(',').filter(Boolean) : []
+
+        if (currentImages.length >= 3) {
+            alert("Maximum 3 images allowed")
+            return
+        }
+
         // Set uploading state
         setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, isUploading: true } : t))
 
@@ -242,13 +251,23 @@ export default function StoreData() {
                 .from('images')
                 .getPublicUrl(fileName)
 
-            handleLocalUpdate(taskId, { uploaded_image: publicUrl })
+            const updatedImages = [...currentImages, publicUrl].join(',')
+            handleLocalUpdate(taskId, { uploaded_image: updatedImages })
         } catch (err) {
             console.error("Error uploading image:", err)
             alert("Failed to upload image")
         } finally {
             setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, isUploading: false } : t))
         }
+    }
+
+    const handleDeleteImage = (taskId, imageUrl) => {
+        const task = tasks.find(t => t.task_id === taskId)
+        if (!task || !task.uploaded_image) return
+
+        const currentImages = task.uploaded_image.split(',').filter(Boolean)
+        const updatedImages = currentImages.filter(url => url !== imageUrl).join(',')
+        handleLocalUpdate(taskId, { uploaded_image: updatedImages })
     }
 
     // Get unique names for the history filter dropdown
@@ -273,7 +292,7 @@ export default function StoreData() {
 
         const isCompletedOrPending = task.db_status === 'Yes' || task.db_status === 'pending_approval'
         const isRejected = task.db_status === 'rejected'
-        const isNotSubmitted = !isCompletedOrPending || isRejected
+        const isNotSubmitted = !isCompletedOrPending && !isRejected
 
         let matchesTab = false
         if (activeTab === 'history') {
@@ -282,6 +301,8 @@ export default function StoreData() {
             matchesTab = isNotSubmitted && (taskDateStr === todayStr || !taskDateStr)
         } else if (activeTab === 'overdue') {
             matchesTab = isNotSubmitted && taskDateStr && taskDateStr < todayStr
+        } else if (activeTab === 'rejected') {
+            matchesTab = isRejected
         }
 
         let matchesFilters = true
@@ -307,6 +328,11 @@ export default function StoreData() {
                 matchesFilters = false
             }
             if (pendingEndDate && (!task.task_start_date || task.task_start_date.substring(0, 10) > pendingEndDate)) {
+                matchesFilters = false
+            }
+        } else if (activeTab === 'rejected') {
+             // Filter by Name
+             if (pendingFilterName && !task.name?.toLowerCase().includes(pendingFilterName.toLowerCase())) {
                 matchesFilters = false
             }
         }
@@ -454,9 +480,23 @@ export default function StoreData() {
                                 }`}
                         >
                             Today's Tasks
-                            {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && (t.task_start_date?.substring(0, 10) === todayStr || !t.task_start_date)).length > 0 && (
+                            {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval' && t.db_status !== 'rejected') && (t.task_start_date?.substring(0, 10) === todayStr || !t.task_start_date)).length > 0 && (
                                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-blue-500 text-[10px] text-white">
-                                    {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && (t.task_start_date?.substring(0, 10) === todayStr || !t.task_start_date)).length}
+                                    {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval' && t.db_status !== 'rejected') && (t.task_start_date?.substring(0, 10) === todayStr || !t.task_start_date)).length}
+                                </span>
+                            )}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('rejected')}
+                            className={`px-4 py-1.5 text-xs font-medium rounded-md transition-all relative ${activeTab === 'rejected'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                }`}
+                        >
+                            Rejected Tasks
+                            {tasks.filter(t => t.db_status === 'rejected').length > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] text-white">
+                                    {tasks.filter(t => t.db_status === 'rejected').length}
                                 </span>
                             )}
                         </button>
@@ -468,9 +508,9 @@ export default function StoreData() {
                                 }`}
                         >
                             Overdue Tasks
-                            {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && t.task_start_date && t.task_start_date.substring(0, 10) < todayStr).length > 0 && (
+                            {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval' && t.db_status !== 'rejected') && t.task_start_date && t.task_start_date.substring(0, 10) < todayStr).length > 0 && (
                                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-                                    {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval') && t.task_start_date && t.task_start_date.substring(0, 10) < todayStr).length}
+                                    {tasks.filter(t => (t.db_status !== 'Yes' && t.db_status !== 'pending_approval' && t.db_status !== 'rejected') && t.task_start_date && t.task_start_date.substring(0, 10) < todayStr).length}
                                 </span>
                             )}
                         </button>
@@ -491,7 +531,7 @@ export default function StoreData() {
                     </div>
 
                     {/* Pending (Today & Overdue) Filters */}
-                    {(activeTab === 'today' || activeTab === 'overdue') && (
+                    {(activeTab === 'today' || activeTab === 'overdue' || activeTab === 'rejected') && (
                         <div className={`flex flex-wrap items-end gap-3 p-1 animate-in fade-in slide-in-from-right-2 ${showMobileFilters ? 'flex' : 'hidden sm:flex'}`}>
                             {isAdmin && (
                                 <div className="flex flex-col gap-1 w-full sm:w-auto">
@@ -668,9 +708,9 @@ export default function StoreData() {
                                                         task.status === 'pending_approval' ? 'bg-yellow-50 text-yellow-700' :
                                                             'bg-red-50 text-red-700'
                                                         }`}>
-                                                        {task.status === 'Yes' ? 'Completed' :
+                                                        {task.status === 'Yes' ? 'Yes' :
                                                             task.status === 'pending_approval' ? 'Pending Approval' :
-                                                                'Incomplete'}
+                                                                'No'}
                                                     </span>
                                                 </td>
                                             )}
@@ -698,7 +738,7 @@ export default function StoreData() {
                                                         onChange={(e) => handleLocalUpdate(task.task_id, { status: e.target.value })}
                                                         className={`block w-full px-2 py-1 text-xs font-medium rounded-md border-0 bg-transparent ring-1 ring-inset focus:ring-2 focus:ring-inset focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed
                                                             ${task.status === 'Yes' ? 'text-green-700 ring-green-600/20 bg-green-50' :
-                                                                'text-red-700 ring-red-600/20 bg-red-50'}`}
+                                                                (task.status === 'No' || task.status === 'rejected') ? 'text-red-700 ring-red-600/20 bg-red-50' : 'text-gray-700 ring-gray-600/20 bg-gray-50'}`}
                                                     >
                                                         <option value="Yes">Yes</option>
                                                         <option value="No">No</option>
@@ -732,17 +772,28 @@ export default function StoreData() {
                                             </td>
                                             <td className={`px-4 py-3 text-muted-foreground ${activeTab !== 'history' ? 'min-w-[200px]' : ''}`}>
                                                 <div className="flex flex-col gap-2">
-                                                    {task.uploaded_image && (
-                                                        <a
-                                                            href={task.uploaded_image}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 hover:underline"
-                                                        >
-                                                            <Eye className="h-3 w-3" />
-                                                            View
-                                                        </a>
-                                                    )}
+                                                    {task.uploaded_image && task.uploaded_image.split(',').filter(Boolean).map((url, index) => (
+                                                        <div key={index} className="flex items-center gap-2 group/img">
+                                                            <a
+                                                                href={url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 hover:underline"
+                                                            >
+                                                                <Eye className="h-3 w-3" />
+                                                                View {index + 1}
+                                                            </a>
+                                                            {activeTab !== 'history' && selectedRows.has(task.task_id) && (
+                                                                <button
+                                                                    onClick={() => handleDeleteImage(task.task_id, url)}
+                                                                    className="p-1 text-destructive opacity-0 group-hover/img:opacity-100 transition-opacity hover:bg-destructive/10 rounded"
+                                                                    title="Delete Image"
+                                                                >
+                                                                    <Trash2 className="h-3 w-3" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
                                                     {activeTab === 'history' ? (
                                                         null
                                                     ) : task.isUploading ? (
@@ -751,22 +802,24 @@ export default function StoreData() {
                                                             Uploading...
                                                         </div>
                                                     ) : (
-                                                        <div className="relative group/file">
-                                                            <button
-                                                                disabled={!selectedRows.has(task.task_id)}
-                                                                className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                                                            >
-                                                                <Upload className="h-3 w-3" />
-                                                                <span>{task.uploaded_image ? 'Change' : 'Upload'}</span>
-                                                            </button>
-                                                            <input
-                                                                disabled={!selectedRows.has(task.task_id)}
-                                                                type="file"
-                                                                accept="image/*"
-                                                                onChange={(e) => handleFileUpload(task.task_id, e.target.files?.[0])}
-                                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed text-[0]"
-                                                            />
-                                                        </div>
+                                                        (task.uploaded_image ? task.uploaded_image.split(',').filter(Boolean).length < 3 : true) && (
+                                                            <div className="relative group/file">
+                                                                <button
+                                                                    disabled={!selectedRows.has(task.task_id)}
+                                                                    className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                >
+                                                                    <Upload className="h-3 w-3" />
+                                                                    <span>{task.uploaded_image ? 'Add New' : 'Upload'}</span>
+                                                                </button>
+                                                                <input
+                                                                    disabled={!selectedRows.has(task.task_id)}
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    onChange={(e) => handleFileUpload(task.task_id, e.target.files?.[0])}
+                                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed text-[0]"
+                                                                />
+                                                            </div>
+                                                        )
                                                     )}
                                                 </div>
                                             </td>
@@ -798,14 +851,12 @@ export default function StoreData() {
                                                     />
                                                 )}
                                                 <span className="font-mono text-xs text-muted-foreground/80">#{String(task.task_id).substring(0, 8)}</span>
-                                                {activeTab === 'history' && (
-                                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${task.status === 'Yes' ? 'bg-green-50 text-green-700' :
-                                                        task.status === 'pending_approval' ? 'bg-yellow-50 text-yellow-700' :
-                                                            'bg-red-50 text-red-700'
-                                                        }`}>
-                                                        {task.status === 'Yes' ? 'Completed' : task.status === 'pending_approval' ? 'Pending' : 'Incomplete'}
-                                                    </span>
-                                                )}
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${task.status === 'Yes' ? 'bg-green-50 text-green-700' :
+                                                    task.status === 'pending_approval' ? 'bg-yellow-50 text-yellow-700' :
+                                                        'bg-red-50 text-red-700'
+                                                    }`}>
+                                                    {task.status === 'Yes' ? 'Yes' : task.status === 'pending_approval' ? 'Pending Approval' : 'No'}
+                                                </span>
                                             </div>
                                             <h3 className="font-medium text-sm text-foreground">{task.task_title}</h3>
                                         </div>
@@ -843,7 +894,7 @@ export default function StoreData() {
                                                     onChange={(e) => handleLocalUpdate(task.task_id, { status: e.target.value })}
                                                     className={`block w-full px-2 py-1.5 text-xs font-medium rounded-md border-0 bg-transparent ring-1 ring-inset focus:ring-2 focus:ring-inset focus:ring-primary disabled:opacity-40 disabled:cursor-not-allowed
                                                         ${task.status === 'Yes' ? 'text-green-700 ring-green-600/20 bg-green-50' :
-                                                            'text-red-700 ring-red-600/20 bg-red-50'}`}
+                                                            (task.status === 'No' || task.status === 'rejected') ? 'text-red-700 ring-red-600/20 bg-red-50' : 'text-gray-700 ring-gray-600/20 bg-gray-50'}`}
                                                 >
                                                     <option value="Yes">Yes</option>
                                                     <option value="No">No</option>
@@ -877,29 +928,39 @@ export default function StoreData() {
                                         </div>
                                     )}
 
-                                    <div className="flex items-center justify-between pt-1">
-                                        <div className="flex gap-3">
-                                            {task.uploaded_image && (
-                                                <a
-                                                    href={task.uploaded_image}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="inline-flex items-center gap-1.5 text-xs font-medium text-primary"
-                                                >
-                                                    <Eye className="h-3 w-3" />
-                                                    View
-                                                </a>
-                                            )}
+                                    <div className="flex flex-col gap-2 pt-1">
+                                        <div className="flex flex-wrap gap-3">
+                                            {task.uploaded_image && task.uploaded_image.split(',').filter(Boolean).map((url, index) => (
+                                                <div key={index} className="flex items-center gap-2">
+                                                    <a
+                                                        href={url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="inline-flex items-center gap-1.5 text-xs font-medium text-primary"
+                                                    >
+                                                        <Eye className="h-3 w-3" />
+                                                        View {index + 1}
+                                                    </a>
+                                                    {activeTab !== 'history' && selectedRows.has(task.task_id) && (
+                                                        <button
+                                                            onClick={() => handleDeleteImage(task.task_id, url)}
+                                                            className="p-1 text-destructive rounded hover:bg-destructive/10"
+                                                        >
+                                                            <Trash2 className="h-3 w-3" />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            ))}
                                         </div>
                                         <div className="flex gap-3">
-                                            {activeTab !== 'history' && !task.isUploading && (
+                                            {activeTab !== 'history' && !task.isUploading && (task.uploaded_image ? task.uploaded_image.split(',').filter(Boolean).length < 3 : true) && (
                                                 <div className="relative">
                                                     <button
                                                         disabled={!selectedRows.has(task.task_id)}
                                                         className="flex items-center gap-1.5 text-xs text-primary font-medium disabled:opacity-40 disabled:cursor-not-allowed"
                                                     >
                                                         <Upload className="h-3 w-3" />
-                                                        {task.uploaded_image ? 'Change' : 'Upload'}
+                                                        {task.uploaded_image ? 'Add New' : 'Upload'}
                                                     </button>
                                                     <input
                                                         disabled={!selectedRows.has(task.task_id)}
