@@ -76,17 +76,21 @@ export default function DelegatedTask() {
             const fullName = userData.full_name
             setCurrentUser({ username, fullName })
 
-            // 2. Fetch One-Time Tasks
-            const role = sessionStorage.getItem("role")
+            // 2. Fetch Tasks (One-time tasks for everyone, plus ALL tasks from Abhishek MD)
+            const abhishekName = "Abhishek Agrawal (MD)"
             let query = supabase
                 .from('master_tasks')
                 .select('*')
-                .eq('freq', 'one-time')
 
-            // If not admin username (specifically per user request), filter tasks
-            // Note: USER specifically asked for "admin" username check here
             if (username !== 'admin') {
-                query = query.or(`name.eq."${fullName}",given_by_username.eq."${username}",given_by_username.eq."${fullName}"`)
+                // Fetch tasks where:
+                // (freq == one-time AND (user is involved))
+                // OR
+                // (assigned by Abhishek MD)
+                query = query.or(`and(freq.eq.one-time,or(name.eq."${fullName}",given_by_username.eq."${username}",given_by_username.eq."${fullName}")),given_by_username.eq."${abhishekName}"`)
+            } else {
+                // Admin sees all one-time tasks + all tasks from Abhishek MD
+                query = query.or(`freq.eq.one-time,given_by_username.eq."${abhishekName}"`)
             }
 
             let { data: allData, error: tasksError } = await query.order('task_start_date', { ascending: false })
@@ -200,8 +204,14 @@ export default function DelegatedTask() {
         if (activeTab === 'completed') {
             matchesTab = isCompletedOnly
         } else if (activeTab === 'pending') {
-            // Pending tab: Show all tasks that are not yet marked as 'Yes' (including pending_approval and overdue)
-            matchesTab = isNotCompleted || task.db_status === 'pending_approval'
+            // Pending tab: Show all tasks that are not yet marked as 'Yes'
+            // SPECIAL RULE: If assigned by Abhishek MD, only show TODAY's pending tasks
+            const isFromMD = task.given_by_username === 'Abhishek Agrawal (MD)'
+            if (isFromMD) {
+                matchesTab = (isNotCompleted || task.db_status === 'pending_approval') && taskDateStr === todayStr
+            } else {
+                matchesTab = isNotCompleted || task.db_status === 'pending_approval'
+            }
         } else if (activeTab === 'overdue') {
             // Overdue tab: tasks that are NOT completed AND NOT pending_approval AND are past due
             matchesTab = isNotCompleted && task.db_status !== 'pending_approval' && taskDateStr && taskDateStr < todayStr
@@ -229,7 +239,12 @@ export default function DelegatedTask() {
     // Calculate Stats for Tabs
     const isCompletedStatus = (t) => t.db_status === 'Yes';
     const isPendingStatus = (t) => {
-        return t.db_status !== 'Yes' || t.db_status === 'pending_approval';
+        const isNotDone = t.db_status !== 'Yes' || t.db_status === 'pending_approval';
+        if (t.given_by_username === 'Abhishek Agrawal (MD)') {
+            const dStr = t.task_start_date ? t.task_start_date.substring(0, 10) : null;
+            return isNotDone && dStr === todayStr;
+        }
+        return isNotDone;
     };
     const isOverdueStatus = (t) => {
         const dStr = t.task_start_date ? t.task_start_date.substring(0, 10) : null;
@@ -391,6 +406,7 @@ export default function DelegatedTask() {
                                     <tr className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-500 font-bold border-b border-gray-200">
                                         {activeMainTab === 'delegated' && activeTab === 'pending' && <th className="px-6 py-4 text-left">Actions</th>}
                                         <th className="px-6 py-4">Status</th>
+                                        <th className="px-6 py-4">Frequency</th>
                                         <th className="px-6 py-4">Due Date</th>
                                         <th className="px-6 py-4">Assignee</th>
                                         <th className="px-6 py-4">Assigned By</th>
@@ -453,6 +469,11 @@ export default function DelegatedTask() {
                                                         {task.db_status === 'Yes' ? 'Completed' :
                                                             task.db_status === 'pending_approval' ? 'Review' :
                                                                 task.db_status === 'rejected' ? 'Rejected' : 'Pending'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="text-[10px] font-bold uppercase text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200 whitespace-nowrap">
+                                                        {task.freq}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-gray-600 font-medium whitespace-nowrap">
@@ -540,6 +561,9 @@ export default function DelegatedTask() {
                                                     {task.db_status === 'Yes' ? 'Completed' :
                                                         task.db_status === 'pending_approval' ? 'Review' :
                                                             task.db_status === 'rejected' ? 'Rejected' : 'Pending'}
+                                                </span>
+                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-600 border border-gray-200 ml-2 whitespace-nowrap">
+                                                    {task.freq}
                                                 </span>
                                                 <div className="flex items-center gap-1.5 text-xs font-bold text-gray-600">
                                                     <CalendarIcon className="h-3.5 w-3.5 text-[#991B1B]" />

@@ -201,8 +201,11 @@ export default function StoreData() {
                 // If batchRemarks provided, use it. Otherwise fall back to inline task.remarks
                 const finalRemarks = batchRemarks ? batchRemarks : task.remarks
 
+                const isFromMD = task.given_by_username === 'Abhishek Agrawal (MD)';
+                const isOneTime = task.freq === 'one-time';
+
                 const updateData = {
-                    status: 'pending_approval',
+                    status: (isFromMD && !isOneTime) ? 'Yes' : 'pending_approval',
                     remarks: finalRemarks,
                     uploaded_image: task.uploaded_image,
                     actual: new Date().toISOString()

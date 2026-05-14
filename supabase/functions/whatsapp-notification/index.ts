@@ -16,10 +16,13 @@ serve(async (req) => {
     const record = payload.record || payload
     console.log("Extracted Record:", JSON.stringify(record, null, 2))
 
-    // Check if it's a 'one-time' task
-    if (record.freq !== 'one-time') {
-      console.log(`Skipping: Frequency is '${record.freq}', not 'one-time'`)
-      return new Response(JSON.stringify({ message: `Skipping: Frequency is '${record.freq}'` }), { status: 200 })
+    // Check if it's a 'one-time' task OR given by Abhishek Agrawal (MD)
+    const isOneTime = record.freq === 'one-time'
+    const isAbhishek = record.given_by_username === 'Abhishek Agrawal (MD)'
+
+    if (!isOneTime && !isAbhishek) {
+      console.log(`Skipping: Frequency is '${record.freq}' and Given By is '${record.given_by_username}'`)
+      return new Response(JSON.stringify({ message: `Skipping: Not one-time and not given by MD` }), { status: 200 })
     }
 
     if (!record.whatsapp_no) {
@@ -29,6 +32,28 @@ serve(async (req) => {
 
     // Initialize Supabase client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+    // Prevent multiple notifications for recurring tasks in the same batch
+    if (!isOneTime) {
+      const { data: earlierTasks, error: checkError } = await supabase
+        .from('master_tasks')
+        .select('task_id')
+        .match({
+          task_title: record.task_title,
+          name: record.name,
+          given_by_username: record.given_by_username,
+          timestamp: record.timestamp
+        })
+        .lt('task_start_date', record.task_start_date)
+        .limit(1)
+
+      if (checkError) {
+        console.error("Error checking for earlier tasks:", checkError)
+      } else if (earlierTasks && earlierTasks.length > 0) {
+        console.log(`Skipping recurring task in batch: ${record.task_title} for ${record.task_start_date}`)
+        return new Response(JSON.stringify({ message: "Skipping recurring task in batch" }), { status: 200 })
+      }
+    }
 
     // Lookup user by their full name to get username (Removed password lookup)
     const { data: userData, error: userError } = await supabase
