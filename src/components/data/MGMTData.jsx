@@ -220,6 +220,8 @@ export default function MGMTData() {
         } catch (err) {
             console.error("Error batch submitting:", err)
             alert("Failed to submit tasks")
+
+
         } finally {
             setLoading(false)
         }

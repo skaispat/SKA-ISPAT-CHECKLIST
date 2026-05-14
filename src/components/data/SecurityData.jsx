@@ -47,6 +47,8 @@ export default function SecurityData() {
     const [isHistoryOpen, setIsHistoryOpen] = useState(false)
     const [isEditTaskOpen, setIsEditTaskOpen] = useState(false)
     const [selectedRows, setSelectedRows] = useState(new Set())
+    const [isDoerModalOpen, setIsDoerModalOpen] = useState(false)
+    const [doerName, setDoerName] = useState("")
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1)
@@ -188,10 +190,10 @@ export default function SecurityData() {
             return;
         }
 
-        confirmBatchSubmit()
+        setIsDoerModalOpen(true)
     }
 
-    const confirmBatchSubmit = async (batchRemarks) => {
+    const confirmBatchSubmit = async (batchRemarks, doerNameValue) => {
         setLoading(true)
         try {
             const updates = Array.from(selectedRows).map(taskId => {
@@ -204,11 +206,14 @@ export default function SecurityData() {
                 const isFromMD = task.given_by_username === 'Abhishek Agrawal (MD)';
                 const isOneTime = task.freq === 'one-time';
 
+                const username = sessionStorage.getItem("username") || "unknown"
                 const updateData = {
                     status: (isFromMD && !isOneTime) ? 'Yes' : 'pending_approval',
                     remarks: finalRemarks,
                     uploaded_image: task.uploaded_image,
-                    actual: new Date().toISOString()
+                    actual: new Date().toISOString().split('T')[0],
+                    doers_name: [doerNameValue],
+                    submitter_name: [username]
                 }
 
                 return supabase.from('master_tasks').update(updateData).eq('task_id', taskId)
@@ -217,6 +222,8 @@ export default function SecurityData() {
             await Promise.all(updates)
             await fetchTasks()
             setSelectedRows(new Set())
+            setIsDoerModalOpen(false)
+            setDoerName("")
         } catch (err) {
             console.error("Error batch submitting:", err)
             alert("Failed to submit tasks")
@@ -334,8 +341,8 @@ export default function SecurityData() {
                 matchesFilters = false
             }
         } else if (activeTab === 'rejected') {
-             // Filter by Name
-             if (pendingFilterName && !task.name?.toLowerCase().includes(pendingFilterName.toLowerCase())) {
+            // Filter by Name
+            if (pendingFilterName && !task.name?.toLowerCase().includes(pendingFilterName.toLowerCase())) {
                 matchesFilters = false
             }
         }
@@ -663,6 +670,7 @@ export default function SecurityData() {
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Department</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Given By</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Name</th>
+                                    {activeTab === 'history' && <th className="px-4 py-3 whitespace-nowrap font-medium">Doer Name</th>}
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[450px] font-medium">Task Title</th>
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[500px] font-medium">Task Description</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Freq</th>
@@ -720,6 +728,11 @@ export default function SecurityData() {
                                             <td className="px-4 py-3 text-muted-foreground">{task.department}</td>
                                             <td className="px-4 py-3 text-muted-foreground">{task.given_by_username}</td>
                                             <td className="px-4 py-3 text-muted-foreground font-medium">{task.name}</td>
+                                            {activeTab === 'history' && (
+                                                <td className="px-4 py-3 text-muted-foreground">
+                                                    {Array.isArray(task.doers_name) ? task.doers_name.join(', ') : (task.doers_name || '-')}
+                                                </td>
+                                            )}
                                             <td className="px-4 py-3 font-medium text-foreground">
                                                 <div title={task.task_title} className="line-clamp-2">
                                                     {task.task_title}
@@ -1044,7 +1057,52 @@ export default function SecurityData() {
                     />
                 )}
 
-                {/* Batch Confirm Modal */}
+                {/* Doer Name Modal */}
+                {isDoerModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                        <div className="bg-background rounded-xl shadow-xl w-full max-w-md animate-in zoom-in-95 duration-200">
+                            <div className="flex items-center justify-between p-4 border-b border-border">
+                                <h2 className="text-lg font-semibold">Submission Details</h2>
+                                <button onClick={() => setIsDoerModalOpen(false)} className="p-2 hover:bg-accent rounded-full text-muted-foreground">
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                confirmBatchSubmit(null, doerName);
+                            }} className="p-4 space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Doer Name <span className="text-destructive">*</span></label>
+                                    <input
+                                        required
+                                        type="text"
+                                        placeholder="Enter the name of the person who did the task"
+                                        value={doerName}
+                                        onChange={(e) => setDoerName(e.target.value)}
+                                        className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="pt-4 flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsDoerModalOpen(false)}
+                                        className="px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-accent rounded-lg transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={loading || !doerName.trim()}
+                                        className="px-6 py-2 text-sm font-medium text-white bg-primary hover:bg-primary/90 rounded-lg shadow-sm disabled:opacity-50 flex items-center gap-2 transition-all"
+                                    >
+                                        {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                                        Submit Tasks
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
 
                 {/* Edit Info Modal */}
                 {isEditTaskOpen && (
