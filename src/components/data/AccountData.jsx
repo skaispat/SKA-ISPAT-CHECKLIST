@@ -28,6 +28,7 @@ export default function AccountData() {
     const todayStr = new Date().toLocaleDateString('en-CA')
     const [tasks, setTasks] = useState([])
     const [loading, setLoading] = useState(true)
+    const [isSubmittingTask, setIsSubmittingTask] = useState(false)
     const [searchTerm, setSearchTerm] = useState("")
     const [activeTab, setActiveTab] = useState("today")
 
@@ -193,7 +194,7 @@ export default function AccountData() {
     }
 
     const confirmBatchSubmit = async (batchRemarks) => {
-        setLoading(true)
+        setIsSubmittingTask(true)
         try {
             const updates = Array.from(selectedRows).map(taskId => {
                 const task = tasks.find(t => t.task_id === taskId)
@@ -219,7 +220,7 @@ export default function AccountData() {
             console.error("Error batch submitting:", err)
             alert("Failed to submit tasks")
         } finally {
-            setLoading(false)
+            setIsSubmittingTask(false)
         }
     }
 
@@ -436,9 +437,11 @@ export default function AccountData() {
                         {selectedRows.size > 0 && (
                             <button
                                 onClick={handleBatchSubmit}
-                                className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-full hover:bg-primary/90 transition-all shadow-sm animate-in fade-in slide-in-from-right-2 whitespace-nowrap"
+                                disabled={isSubmittingTask || tasks.some(t => selectedRows.has(t.task_id) && t.isUploading)}
+                                className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-full hover:bg-primary/90 transition-all shadow-sm animate-in fade-in slide-in-from-right-2 whitespace-nowrap flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                             >
-                                Submit {selectedRows.size} Tasks
+                                {isSubmittingTask && <Loader2 className="h-4 w-4 animate-spin" />}
+                                {isSubmittingTask ? 'Submitting...' : `Submit ${selectedRows.size} Tasks`}
                             </button>
                         )}
                         <button
@@ -662,8 +665,11 @@ export default function AccountData() {
                             <tbody className="divide-y divide-border/30">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan="15" className="px-4 py-8 text-center text-muted-foreground">
-                                            Loading data...
+                                        <td colSpan="15" className="px-4 py-16 text-center">
+                                            <div className="flex flex-col items-center justify-center gap-3">
+                                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                                <p className="text-sm font-medium text-muted-foreground">Loading data...</p>
+                                            </div>
                                         </td>
                                     </tr>
                                 ) : filteredTasks.length === 0 ? (
@@ -821,7 +827,10 @@ export default function AccountData() {
                     {/* Mobile Card View */}
                     <div className="md:hidden divide-y divide-border/30">
                         {loading ? (
-                            <div className="px-4 py-8 text-center text-muted-foreground">Loading data...</div>
+                            <div className="px-4 py-16 text-center flex flex-col items-center justify-center gap-3">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                <p className="text-sm font-medium text-muted-foreground">Loading data...</p>
+                            </div>
                         ) : filteredTasks.length === 0 ? (
                             <div className="px-4 py-8 text-center text-muted-foreground">No tasks found.</div>
                         ) : (
@@ -1053,6 +1062,7 @@ export default function AccountData() {
 function HistoryModal({ task, onClose }) {
     const [history, setHistory] = useState([])
     const [loading, setLoading] = useState(true)
+    const [isSubmittingTask, setIsSubmittingTask] = useState(false)
     const [filterMember, setFilterMember] = useState("")
     const [filterDate, setFilterDate] = useState("")
 
