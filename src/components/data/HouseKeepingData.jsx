@@ -1465,6 +1465,7 @@ function SubmitTaskModal({ task, onClose }) {
 function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
     const [selectedEmployee, setSelectedEmployee] = useState("")
     const [selectedTitle, setSelectedTitle] = useState("")
+    const [selectedLocation, setSelectedLocation] = useState("")
 
     // Form Fields
     const [newTitle, setNewTitle] = useState("")
@@ -1501,10 +1502,20 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
         : tasks
     const uniqueTitles = [...new Set(filteredTasksByEmployee.map(t => t.task_title))].sort()
 
-    // Populate form when title is selected
+    const filteredTasksByTitle = selectedTitle
+        ? filteredTasksByEmployee.filter(t => t.task_title === selectedTitle)
+        : filteredTasksByEmployee
+
+    const uniqueLocations = [...new Set(filteredTasksByTitle.map(t => Array.isArray(t.location) ? t.location.join(', ') : (t.location || '')))].filter(Boolean).sort()
+
+    // Populate form when title and location are selected
     useEffect(() => {
-        if (selectedTitle) {
-            const task = tasks.find(t => t.task_title === selectedTitle)
+        if (selectedTitle && selectedLocation) {
+            const task = tasks.find(t =>
+                t.task_title === selectedTitle &&
+                (Array.isArray(t.location) ? t.location.join(', ') : (t.location || '')) === selectedLocation &&
+                (!selectedEmployee || t.name === selectedEmployee)
+            )
             if (task) {
                 setNewTitle(task.task_title)
                 setNewDescription(task.task_description || "")
@@ -1525,15 +1536,28 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
             setNewEnableReminders(false)
             setNewRequireAttachment(false)
         }
-    }, [selectedTitle, tasks])
+    }, [selectedTitle, selectedLocation, selectedEmployee, tasks])
 
     const handleSubmit = async (e) => {
         e.preventDefault()
-        if (!selectedTitle || !newTitle) return
+        if (!selectedTitle || !newTitle || !selectedLocation) return
 
         setIsSubmitting(true)
         try {
             const department = tasks[0]?.department || 'HouseKeeping'
+
+            const tasksToUpdate = tasks.filter(t =>
+                t.task_title === selectedTitle &&
+                t.department === department &&
+                (Array.isArray(t.location) ? t.location.join(', ') : (t.location || '')) === selectedLocation &&
+                (!selectedEmployee || t.name === selectedEmployee)
+            )
+
+            const taskIds = tasksToUpdate.map(t => t.task_id)
+
+            if (taskIds.length === 0) {
+                throw new Error("Could not find matching tasks to update.")
+            }
 
             const { data, error } = await supabase
                 .from('master_tasks')
@@ -1546,8 +1570,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
                     enable_reminders: newEnableReminders,
                     require_attachment: newRequireAttachment
                 })
-                .eq('task_title', selectedTitle)
-                .eq('department', department)
+                .in('task_id', taskIds)
                 .select()
 
             if (error) throw error
@@ -1563,8 +1586,13 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
     }
 
     // Filter tasks that will be deleted based on current selection
-    const tasksToDelete = selectedTitle
-        ? tasks.filter(t => t.task_title === selectedTitle && t.department === (tasks[0]?.department || 'HouseKeeping'))
+    const tasksToDelete = selectedTitle && selectedLocation
+        ? tasks.filter(t =>
+            t.task_title === selectedTitle &&
+            t.department === (tasks[0]?.department || 'HouseKeeping') &&
+            (Array.isArray(t.location) ? t.location.join(', ') : (t.location || '')) === selectedLocation &&
+            (!selectedEmployee || t.name === selectedEmployee)
+        )
         : []
 
     const handleDeleteClick = () => {
@@ -1574,13 +1602,16 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
     const confirmDelete = async () => {
         setIsSubmitting(true)
         try {
-            const department = tasks[0]?.department || 'HouseKeeping'
+            const taskIds = tasksToDelete.map(t => t.task_id)
+
+            if (taskIds.length === 0) {
+                throw new Error("No tasks selected for deletion.")
+            }
 
             const { error } = await supabase
                 .from('master_tasks')
                 .delete()
-                .eq('task_title', selectedTitle)
-                .eq('department', department)
+                .in('task_id', taskIds)
 
             if (error) throw error
 
@@ -1635,7 +1666,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
                         {/* Section 1: Filter & Selection */}
                         <div className="space-y-4">
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/80 mb-3">1. Select Task</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-foreground">Filter by Employee <span className="text-muted-foreground font-normal">(Optional)</span></label>
                                     <div className="relative">
@@ -1644,6 +1675,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
                                             onChange={(e) => {
                                                 setSelectedEmployee(e.target.value)
                                                 setSelectedTitle("")
+                                                setSelectedLocation("")
                                             }}
                                             className="w-full pl-3 pr-10 py-2.5 rounded-lg border border-input bg-background text-sm focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all appearance-none"
                                         >
@@ -1662,20 +1694,39 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
                                     <label className="text-sm font-medium text-foreground">Select Task Title<span className="text-destructive">*</span></label>
                                     <select
                                         value={selectedTitle}
-                                        onChange={(e) => setSelectedTitle(e.target.value)}
+                                        onChange={(e) => {
+                                            setSelectedTitle(e.target.value)
+                                            setSelectedLocation("")
+                                        }}
                                         className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all shadow-sm"
                                         required
                                     >
-                                        <option value="">-- Choose Task to Edit --</option>
+                                        <option value="">-- Choose Task --</option>
                                         {uniqueTitles.map(title => (
                                             <option key={title} value={title}>{title}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-foreground">Select Location<span className="text-destructive">*</span></label>
+                                    <select
+                                        value={selectedLocation}
+                                        onChange={(e) => setSelectedLocation(e.target.value)}
+                                        className="w-full px-3 py-2.5 rounded-lg border border-input bg-background text-sm focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all shadow-sm disabled:opacity-50"
+                                        disabled={!selectedTitle}
+                                        required
+                                    >
+                                        <option value="">-- Choose Location --</option>
+                                        {uniqueLocations.map(loc => (
+                                            <option key={loc} value={loc}>{loc}</option>
                                         ))}
                                     </select>
                                 </div>
                             </div>
                         </div>
 
-                        {selectedTitle && (
+                        {selectedTitle && selectedLocation && (
                             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 <hr className="border-border/50" />
 
@@ -1803,7 +1854,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
                 {/* Footer Actions */}
                 <div className="p-4 border-t border-border bg-muted/10 flex justify-between items-center gap-3 z-10">
                     <div>
-                        {selectedTitle && (
+                        {selectedTitle && selectedLocation && (
                             <button
                                 type="button"
                                 onClick={handleDeleteClick}
@@ -1826,7 +1877,7 @@ function EditTaskInfoModal({ tasks, onClose, onUpdate, onRefresh }) {
                         <button
                             type="submit"
                             form="edit-task-form"
-                            disabled={isSubmitting || !selectedTitle}
+                            disabled={isSubmitting || !selectedTitle || !selectedLocation}
                             className="px-5 py-2.5 text-sm font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-lg shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
                         >
                             {isSubmitting ? (
