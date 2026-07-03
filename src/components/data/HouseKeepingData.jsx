@@ -19,7 +19,8 @@ import {
     ChevronsRight,
     Edit,
     AlertCircle,
-    Trash2
+    Trash2,
+    Download
 } from "lucide-react"
 
 import AdminLayout from "../layout/AdminLayout"
@@ -283,6 +284,24 @@ export default function HouseKeepingData() {
         const currentImages = task.uploaded_image.split(',').filter(Boolean)
         const updatedImages = currentImages.filter(url => url !== imageUrl).join(',')
         handleLocalUpdate(taskId, { uploaded_image: updatedImages })
+    }
+
+    const handleDownloadImage = async (url, taskId, index) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `task_${taskId}_image_${index + 1}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error("Error downloading image:", error);
+            window.open(url, '_blank');
+        }
     }
 
     // Get unique names for the history filter dropdown
@@ -840,6 +859,14 @@ export default function HouseKeepingData() {
                                                                 <Eye className="h-3 w-3" />
                                                                 View {index + 1}
                                                             </a>
+                                                            <button
+                                                                onClick={() => handleDownloadImage(url, task.task_id, index)}
+                                                                className="inline-flex items-center gap-1.5 p-1 text-xs font-medium text-primary hover:text-primary/80 hover:bg-primary/10 rounded transition-colors"
+                                                                title="Download Image"
+                                                            >
+                                                                <Download className="h-3 w-3" />
+                                                                Download
+                                                            </button>
                                                             {activeTab !== 'history' && selectedRows.has(task.task_id) && (
                                                                 <button
                                                                     onClick={() => handleDeleteImage(task.task_id, url)}
@@ -1028,6 +1055,14 @@ export default function HouseKeepingData() {
                                                             <Eye className="h-3 w-3" />
                                                             View {index + 1}
                                                         </a>
+                                                        <button
+                                                            onClick={() => handleDownloadImage(url, task.task_id, index)}
+                                                            className="inline-flex items-center gap-1.5 p-1 text-xs font-medium text-primary hover:text-primary/80 hover:bg-primary/10 rounded transition-colors"
+                                                            title="Download Image"
+                                                        >
+                                                            <Download className="h-3 w-3" />
+                                                            Download
+                                                        </button>
                                                         {activeTab !== 'history' && selectedRows.has(task.task_id) && (
                                                             <button
                                                                 onClick={() => handleDeleteImage(task.task_id, url)}
