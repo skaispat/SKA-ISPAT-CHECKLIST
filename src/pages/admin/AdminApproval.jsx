@@ -12,7 +12,8 @@ import {
     ChevronLeft,
     ChevronRight,
     ChevronsLeft,
-    ChevronsRight
+    ChevronsRight,
+    Download
 } from "lucide-react"
 
 export default function AdminApproval() {
@@ -135,6 +136,24 @@ export default function AdminApproval() {
             hour: "2-digit",
             minute: "2-digit"
         })
+    }
+
+    const handleDownloadImage = async (url, taskId, index) => {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `task_${taskId}_image_${index + 1}.jpg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            console.error("Error downloading image:", error);
+            window.open(url, '_blank');
+        }
     }
 
     const uniqueDepartments = [...new Set(tasks.map(t => t.department))].filter(Boolean).sort()
@@ -304,16 +323,24 @@ export default function AdminApproval() {
                                                 {task.uploaded_image ? (
                                                     <div className="flex flex-col gap-1.5">
                                                         {task.uploaded_image.split(',').filter(Boolean).map((url, index) => (
-                                                            <a
-                                                                key={index}
-                                                                href={url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="inline-flex items-center gap-1.5 text-[#991B1B] hover:text-[#7f1d1d] font-medium text-xs hover:underline"
-                                                            >
-                                                                <Eye className="w-3.5 h-3.5" />
-                                                                View Image {index + 1}
-                                                            </a>
+                                                            <div key={index} className="flex items-center gap-2">
+                                                                <a
+                                                                    href={url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1.5 text-[#991B1B] hover:text-[#7f1d1d] font-medium text-xs hover:underline"
+                                                                >
+                                                                    <Eye className="w-3.5 h-3.5" />
+                                                                    View Image {index + 1}
+                                                                </a>
+                                                                <button
+                                                                    onClick={() => handleDownloadImage(url, task.task_id, index)}
+                                                                    className="p-1 text-gray-500 hover:text-[#991B1B] hover:bg-red-50 rounded transition-colors"
+                                                                    title="Download Image"
+                                                                >
+                                                                    <Download className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
                                                         ))}
                                                     </div>
                                                 ) : (
@@ -408,9 +435,18 @@ export default function AdminApproval() {
                                     {task.uploaded_image && (
                                         <div className="flex flex-col gap-2">
                                             {task.uploaded_image.split(',').filter(Boolean).map((url, index) => (
-                                                <a key={index} href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[#991B1B] font-medium text-xs">
-                                                    <Eye className="w-3.5 h-3.5" /> View Proof {index + 1}
-                                                </a>
+                                                <div key={index} className="flex items-center gap-3">
+                                                    <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[#991B1B] font-medium text-xs">
+                                                        <Eye className="w-3.5 h-3.5" /> View Proof {index + 1}
+                                                    </a>
+                                                    <button
+                                                        onClick={() => handleDownloadImage(url, task.task_id, index)}
+                                                        className="p-1 text-gray-500 hover:text-[#991B1B] hover:bg-red-50 rounded transition-colors"
+                                                        title="Download Image"
+                                                    >
+                                                        <Download className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
                                             ))}
                                         </div>
                                     )}
