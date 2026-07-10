@@ -80,11 +80,14 @@ const UserDashboard = () => {
 
             const processedTasks = tasksData.map(t => {
                 const isCompleted = t.status === "Yes"
+                const isPendingApproval = t.status === "pending_approval"
                 const taskDate = t.task_start_date ? new Date(t.task_start_date) : null
                 let derivedStatus = 'pending'
 
                 if (isCompleted) {
                     derivedStatus = 'completed'
+                } else if (isPendingApproval) {
+                    derivedStatus = 'pending_approval'
                 } else if (taskDate) {
                     const d = new Date(taskDate)
                     d.setHours(0, 0, 0, 0)
@@ -112,8 +115,8 @@ const UserDashboard = () => {
             const total = tasksTillToday.length
             const completed = tasksTillToday.filter(t => t.derivedStatus === 'completed').length
             const overdue = tasksTillToday.filter(t => t.derivedStatus === 'overdue').length
-            // Pending is strictly today's pending
-            const pending = tasksTillToday.filter(t => t.task_start_date && t.task_start_date.substring(0, 10) === todayStr && t.derivedStatus === 'pending').length
+            // Pending is strictly today's pending OR pending_approval
+            const pending = tasksTillToday.filter(t => t.derivedStatus === 'pending_approval' || (t.task_start_date && t.task_start_date.substring(0, 10) === todayStr && t.derivedStatus === 'pending')).length
 
             const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0
 

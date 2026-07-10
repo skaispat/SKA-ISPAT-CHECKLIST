@@ -635,11 +635,14 @@ export default function AdminDashboard() {
                 today.setHours(0, 0, 0, 0);
 
                 const isCompleted = row.status === 'Yes';
+                const isPendingApproval = row.status === 'pending_approval';
 
                 // Determine derived status
                 let derivedStatus = 'pending';
                 if (isCompleted) {
                     derivedStatus = 'completed';
+                } else if (isPendingApproval) {
+                    derivedStatus = 'pending_approval';
                 } else if (taskDate && taskDate < today) {
                     derivedStatus = 'overdue';
                 } else {
@@ -677,8 +680,8 @@ export default function AdminDashboard() {
                         if (derivedStatus === 'overdue') {
                             overdueTasks++;
                             statusData.Overdue++;
-                        } else if (isDueToday) {
-                            // Only count today's tasks in the pending stat
+                        } else if (derivedStatus === 'pending_approval' || isDueToday) {
+                            // Count today's tasks OR pending approval tasks in the pending stat
                             pendingTasks++;
                             statusData.Pending++;
                         }
@@ -693,7 +696,9 @@ export default function AdminDashboard() {
                     assignedTo: assignedTo,
                     dueDate: row.task_start_date ? formatDateToDDMMYYYY(new Date(row.task_start_date)) : '',
                     status: derivedStatus,
-                    frequency: row.freq || 'one-time'
+                    frequency: row.freq || 'one-time',
+                    location: row.location,
+                    description: row.task_description
                 };
             });
 
@@ -1216,7 +1221,11 @@ export default function AdminDashboard() {
                                             <thead className="bg-[#FEF2F2] sticky top-0 z-10">
                                                 <tr>
                                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-[#991B1B] uppercase tracking-wider">Task Title</th>
+                                                    <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-[#991B1B] uppercase tracking-wider">Description</th>
                                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-[#991B1B] uppercase tracking-wider">Assigned To</th>
+                                                    {selectedMasterOption?.toLowerCase() === 'housekeeping' && (
+                                                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-[#991B1B] uppercase tracking-wider">Location</th>
+                                                    )}
                                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-[#991B1B] uppercase tracking-wider">Due Date</th>
                                                     <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-[#991B1B] uppercase tracking-wider">Frequency</th>
                                                 </tr>
@@ -1236,10 +1245,19 @@ export default function AdminDashboard() {
                                                 ) : (
                                                     getTasksByView(taskView).slice(0, visibleTasksCount).map((task) => (
                                                         <tr key={task.id} className="hover:bg-[#FEF2F2]/30 transition-colors group">
-                                                            <td className="px-6 py-4">
-                                                                <div className="text-sm font-medium text-gray-900 group-hover:text-[#991B1B] transition-colors truncate max-w-[200px]" title={task.title}>
-                                                                    {task.title}
-                                                                </div>
+                                                            <td className="px-6 py-4 max-w-[250px]">
+                                                                <ExpandableText
+                                                                    text={task.title}
+                                                                    maxLength={40}
+                                                                    className="text-sm font-medium text-gray-900 group-hover:text-[#991B1B] transition-colors"
+                                                                />
+                                                            </td>
+                                                            <td className="px-6 py-4 max-w-[300px]">
+                                                                <ExpandableText
+                                                                    text={task.task_description}
+                                                                    maxLength={60}
+                                                                    className="text-sm text-gray-500"
+                                                                />
                                                             </td>
                                                             <td className="px-6 py-4">
                                                                 <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -1247,6 +1265,13 @@ export default function AdminDashboard() {
                                                                     <span className="break-words">{task.assignedTo}</span>
                                                                 </div>
                                                             </td>
+                                                            {selectedMasterOption?.toLowerCase() === 'housekeeping' && (
+                                                                <td className="px-6 py-4">
+                                                                    <div className="text-sm text-gray-500 max-w-[150px] truncate" title={Array.isArray(task.location) ? task.location.join(', ') : task.location}>
+                                                                        {Array.isArray(task.location) ? task.location.join(', ') : (task.location || '-')}
+                                                                    </div>
+                                                                </td>
+                                                            )}
                                                             <td className="px-6 py-4">
                                                                 <div className="flex items-center gap-2 text-sm text-gray-500">
                                                                     <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />
@@ -1281,23 +1306,41 @@ export default function AdminDashboard() {
                                                 {getTasksByView(taskView).slice(0, visibleTasksCount).map((task) => (
                                                     <div key={task.id} className="p-3 md:p-4 space-y-2 md:space-y-3 hover:bg-[#FEF2F2]/30 transition-colors">
                                                         <div className="flex justify-between items-start gap-2">
-                                                            <div className="text-sm font-medium text-gray-900 line-clamp-2" title={task.title}>
-                                                                {task.title}
-                                                            </div>
+                                                            <ExpandableText
+                                                                text={task.title}
+                                                                maxLength={50}
+                                                                className="text-sm font-medium text-gray-900"
+                                                            />
                                                             <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${getFrequencyColor(task.frequency)}`}>
                                                                 {task.frequency}
                                                             </span>
                                                         </div>
 
-                                                        <div className="flex items-center justify-between text-xs text-gray-500">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <Users className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                                                                <span className="truncate max-w-[120px]">{task.assignedTo}</span>
+                                                        {task.task_description && (
+                                                            <ExpandableText
+                                                                text={task.task_description}
+                                                                maxLength={80}
+                                                                className="text-xs text-gray-500"
+                                                            />
+                                                        )}
+
+                                                        <div className="flex flex-col gap-2 text-xs text-gray-500 mt-2">
+                                                            <div className="flex items-center justify-between">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <Users className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                                                                    <span className="truncate max-w-[120px]">{task.assignedTo}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                                                                    {task.dueDate}
+                                                                </div>
                                                             </div>
-                                                            <div className="flex items-center gap-1.5">
-                                                                <Clock className="h-3.5 w-3.5 text-gray-400 shrink-0" />
-                                                                {task.dueDate}
-                                                            </div>
+                                                            {selectedMasterOption?.toLowerCase() === 'housekeeping' && task.location && (
+                                                                <div className="flex items-center gap-1.5 bg-gray-50 p-1.5 rounded w-fit">
+                                                                    <span className="font-semibold text-gray-600">Location:</span>
+                                                                    <span className="truncate">{Array.isArray(task.location) ? task.location.join(', ') : task.location}</span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 ))}
@@ -1351,13 +1394,13 @@ export default function AdminDashboard() {
                 {/* Bottom Section: Tabs and Report */}
                 <div className="space-y-6">
                     <div>
-                    <div className="overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2">
-                        <div className="inline-flex items-center p-1 rounded-xl bg-gray-100/80 border border-gray-200 min-w-max">
-                            <BottomTab active={activeTab === "overview"} onClick={() => setActiveTab("overview")} label="Overview" icon={<LayoutDashboard className="h-4 w-4" />} />
-                            <BottomTab active={activeTab === "mis"} onClick={() => setActiveTab("mis")} label="MIS Report" icon={<FileBarChart className="h-4 w-4" />} />
-                            <BottomTab active={activeTab === "staff"} onClick={() => setActiveTab("staff")} label="Staff Performance" icon={<UserCheck className="h-4 w-4" />} />
+                        <div className="overflow-x-auto pb-4 scrollbar-hide -mx-2 px-2">
+                            <div className="inline-flex items-center p-1 rounded-xl bg-gray-100/80 border border-gray-200 min-w-max">
+                                <BottomTab active={activeTab === "overview"} onClick={() => setActiveTab("overview")} label="Overview" icon={<LayoutDashboard className="h-4 w-4" />} />
+                                <BottomTab active={activeTab === "mis"} onClick={() => setActiveTab("mis")} label="MIS Report" icon={<FileBarChart className="h-4 w-4" />} />
+                                <BottomTab active={activeTab === "staff"} onClick={() => setActiveTab("staff")} label="Staff Performance" icon={<UserCheck className="h-4 w-4" />} />
+                            </div>
                         </div>
-                    </div>
                     </div>
 
                     <div className="min-h-[400px]">
@@ -1931,3 +1974,28 @@ const StatTasksModal = ({ isOpen, onClose, title, tasks }: { isOpen: boolean; on
     )
 }
 
+const ExpandableText = ({ text, maxLength = 60, className = "" }: { text: string; maxLength?: number; className?: string }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    if (!text) return <span className={className}>-</span>;
+
+    if (text.length <= maxLength) {
+        return <div className={className}>{text}</div>;
+    }
+
+    return (
+        <div className={className}>
+            {isExpanded ? text : `${text.substring(0, maxLength)}...`}
+            <button
+                onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsExpanded(!isExpanded);
+                }}
+                className="text-[#991B1B] hover:underline font-semibold ml-1 text-[10px] uppercase tracking-wider"
+            >
+                {isExpanded ? "Show Less" : "Show More"}
+            </button>
+        </div>
+    );
+};
