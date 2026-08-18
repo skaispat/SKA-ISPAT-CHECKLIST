@@ -26,7 +26,8 @@ import {
 import AdminLayout from "../layout/AdminLayout"
 
 export default function HouseKeepingData() {
-    const todayStr = new Date().toLocaleDateString('en-CA')
+    const today = new Date()
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     const [tasks, setTasks] = useState([])
     const [loading, setLoading] = useState(true)
     const [isSubmittingTask, setIsSubmittingTask] = useState(false)
@@ -103,7 +104,7 @@ export default function HouseKeepingData() {
             let query = supabase
                 .from('master_tasks')
                 .select('*')
-                .eq('department', deptData.dept_name)
+                .ilike('department', 'housekeeping')
 
             // 3. Apply Role-Based Filtering
             const role = sessionStorage.getItem("role")
@@ -134,7 +135,7 @@ export default function HouseKeepingData() {
             let hasMore = true
 
             // Apply ordering
-            const orderedQuery = query.order('timestamp', { ascending: false })
+            const orderedQuery = query.order('task_id', { ascending: false })
 
             while (hasMore) {
                 const { data, error } = await orderedQuery.range(page * pageSize, (page + 1) * pageSize - 1)
@@ -219,7 +220,7 @@ export default function HouseKeepingData() {
                     status: (isFromMD && !isOneTime) ? 'Yes' : 'pending_approval',
                     remarks: finalRemarks,
                     uploaded_image: task.uploaded_image,
-                    actual: new Date().toISOString().split('T')[0], // Extract only YYYY-MM-DD
+                    actual: getISTTimestamp(),
                     doers_name: [task.doers_name], // Wrap in array as database type is text[]
                     submitter_name: [username]   // Wrap in array as database type is text[]
                 }
@@ -321,7 +322,8 @@ export default function HouseKeepingData() {
             String(val).toLowerCase().includes(searchTerm.toLowerCase())
         )
 
-        const todayStr = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local
+        const d = new Date()
+        const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` // YYYY-MM-DD local
         const taskDateStr = task.task_start_date ? task.task_start_date.substring(0, 10) : null
 
         const isCompletedOrPending = task.db_status === 'Yes' || task.db_status === 'pending_approval'
@@ -431,6 +433,66 @@ export default function HouseKeepingData() {
             newSelected.add(taskId)
         }
         setSelectedRows(newSelected)
+    }
+
+    // Helper to get current IST timestamp with actual time in ISO format (+05:30)
+    const getISTTimestamp = () => {
+        const now = new Date()
+        const options = {
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }
+        const parts = new Intl.DateTimeFormat('en-CA', options).formatToParts(now)
+        const p = {}
+        parts.forEach(({ type, value }) => {
+            p[type] = value
+        })
+        return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}+05:30`
+    }
+
+    // Helper to format actual time in IST (DD/MM/YYYY HH:mm:ss)
+    // If an old record only stored the date (00:00:00+00), show date only without 05:30:00
+    const formatActualTime = (dateString) => {
+        if (!dateString) return "-"
+
+        const trimmed = String(dateString).trim()
+        const isDateOnly = (
+            /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ||
+            /^\d{4}-\d{2}-\d{2}[ T]00:00:00(\+00(:00)?|Z)?$/.test(trimmed)
+        )
+
+        const d = new Date(dateString)
+        if (isNaN(d.getTime())) return dateString
+
+        if (isDateOnly) {
+            const parts = trimmed.split(' ')[0].split('T')[0].split('-')
+            if (parts.length === 3) {
+                const [year, month, day] = parts
+                return `${day}/${month}/${year}`
+            }
+            const day = String(d.getUTCDate()).padStart(2, '0')
+            const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+            const year = d.getUTCFullYear()
+            return `${day}/${month}/${year}`
+        }
+
+        const day = String(d.getDate()).padStart(2, '0')
+        const month = String(d.getMonth() + 1).padStart(2, '0')
+        const year = d.getFullYear()
+        const time = d.toLocaleTimeString('en-GB', {
+            timeZone: 'Asia/Kolkata',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        })
+        return `${day}/${month}/${year} ${time}`
     }
 
     // Format date helper
@@ -710,6 +772,7 @@ export default function HouseKeepingData() {
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[200px] font-medium">Remarks</th>
                                     <th className="px-4 py-3 whitespace-nowrap min-w-[200px] font-medium text-amber-600">Admin Remarks</th>
                                     <th className="px-4 py-3 whitespace-nowrap font-medium">Image</th>
+                                    {activeTab === 'history' && <th className="px-4 py-3 whitespace-nowrap font-medium">Actual Time</th>}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border/30">
@@ -907,6 +970,11 @@ export default function HouseKeepingData() {
                                                     )}
                                                 </div>
                                             </td>
+                                            {activeTab === 'history' && (
+                                                <td className="px-4 py-3 text-muted-foreground text-xs font-mono whitespace-nowrap">
+                                                    {formatActualTime(task.actual)}
+                                                </td>
+                                            )}
                                         </tr>
                                     ))
                                 )}
@@ -976,6 +1044,12 @@ export default function HouseKeepingData() {
                                             <span>Given By:</span>
                                             <span className="font-medium text-foreground truncate">{task.given_by_username}</span>
                                         </div>
+                                        {activeTab === 'history' && task.actual && (
+                                            <div className="flex items-center gap-1.5 col-span-2">
+                                                <span>Actual Time:</span>
+                                                <span className="font-medium text-foreground font-mono text-[11px]">{formatActualTime(task.actual)}</span>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {activeTab !== 'history' && (
@@ -1202,7 +1276,7 @@ function HistoryModal({ task, onClose }) {
                     .eq('task_title', task.task_title)
                     .eq('department', task.department)
                     .neq('task_id', task.task_id) // Exclude current? Or keep it? Let's keep all.
-                    .order('timestamp', { ascending: false })
+                    .order('task_id', { ascending: false })
 
                 // Helper to apply filters if we were doing server-side, 
                 // but user asked for UI filters in the dropdown/view. 
@@ -1316,10 +1390,7 @@ function HistoryModal({ task, onClose }) {
                                         </td>
                                         <td className="px-4 py-3 max-w-xs text-muted-foreground text-xs leading-relaxed">{item.remarks || '-'}</td>
                                         <td className="px-4 py-3 max-w-xs text-amber-700/80 text-xs leading-relaxed font-medium">{item.admin_remark || '-'}</td>
-                                        <td className="px-4 py-3 text-muted-foreground text-xs font-mono">{item.actual ? (() => {
-                                            const d = new Date(item.actual)
-                                            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
-                                        })() : '-'}</td>
+                                        <td className="px-4 py-3 text-muted-foreground text-xs font-mono whitespace-nowrap">{formatActualTime(item.actual)}</td>
                                     </tr>
                                 ))
                             )}
@@ -1375,11 +1446,16 @@ function SubmitTaskModal({ task, onClose }) {
                 setUploading(false)
             }
 
+            const nowISTTime = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Kolkata', hour12: false })
+            const actualValue = formData.actual
+                ? (formData.actual.includes('T') ? formData.actual : `${formData.actual}T${nowISTTime}+05:30`)
+                : getISTTimestamp()
+
             const { error } = await supabase
                 .from('master_tasks')
                 .update({
                     status: formData.status,
-                    actual: formData.actual,
+                    actual: actualValue,
                     remarks: formData.remarks,
                     delay: formData.delay,
                     uploaded_image: imageUrl

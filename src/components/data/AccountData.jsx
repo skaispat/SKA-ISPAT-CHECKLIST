@@ -25,7 +25,8 @@ import {
 import AdminLayout from "../layout/AdminLayout"
 
 export default function AccountData() {
-    const todayStr = new Date().toLocaleDateString('en-CA')
+    const __d = new Date();
+    const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`;
     const [tasks, setTasks] = useState([])
     const [loading, setLoading] = useState(true)
     const [isSubmittingTask, setIsSubmittingTask] = useState(false)
@@ -103,7 +104,7 @@ export default function AccountData() {
             let query = supabase
                 .from('master_tasks')
                 .select('*')
-                .eq('department', deptData.dept_name)
+                .ilike('department', deptData.dept_name)
 
             // 3. Apply Role-Based Filtering
             const role = sessionStorage.getItem("role")
@@ -173,13 +174,11 @@ export default function AccountData() {
         setTasks(prev => prev.map(t => t.task_id === taskId ? { ...t, ...updates } : t))
     }
 
-
     const handleBatchSubmit = () => {
         // Validation: Check for required attachments
         const tasksToSubmit = tasks.filter(t => selectedRows.has(t.task_id));
 
         // Check if any selected task requires an attachment but doesn't have one
-        // We ignore the inline 'status' dropdown relying on selection = intent to submit
         const missingImages = tasksToSubmit.filter(t =>
             (t.require_attachment === true || t.require_attachment === 'Yes') &&
             !t.uploaded_image
@@ -289,7 +288,7 @@ export default function AccountData() {
             String(val).toLowerCase().includes(searchTerm.toLowerCase())
         )
 
-        const todayStr = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local
+        const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`; // YYYY-MM-DD local
         const taskDateStr = task.task_start_date ? task.task_start_date.substring(0, 10) : null
 
         const isCompletedOrPending = task.db_status === 'Yes' || task.db_status === 'pending_approval'

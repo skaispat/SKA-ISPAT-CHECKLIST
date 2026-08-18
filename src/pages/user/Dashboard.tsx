@@ -81,6 +81,7 @@ const UserDashboard = () => {
             const processedTasks = tasksData.map(t => {
                 const isCompleted = t.status === "Yes"
                 const isPendingApproval = t.status === "pending_approval"
+                const isRejected = t.status === "rejected"
                 const taskDate = t.task_start_date ? new Date(t.task_start_date) : null
                 let derivedStatus = 'pending'
 
@@ -88,6 +89,8 @@ const UserDashboard = () => {
                     derivedStatus = 'completed'
                 } else if (isPendingApproval) {
                     derivedStatus = 'pending_approval'
+                } else if (isRejected) {
+                    derivedStatus = 'rejected'
                 } else if (taskDate) {
                     const d = new Date(taskDate)
                     d.setHours(0, 0, 0, 0)
@@ -107,7 +110,8 @@ const UserDashboard = () => {
                 }
             })
 
-            const todayStr = new Date().toLocaleDateString('en-CA')
+            const __d = new Date();
+            const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`;
 
             // Filter tasks to only include those till today for stats
             const tasksTillToday = processedTasks.filter(t => t.task_start_date && t.task_start_date.substring(0, 10) <= todayStr)
@@ -404,7 +408,8 @@ const UserDashboard = () => {
                     onClose={() => setStatModal({ ...statModal, isOpen: false })}
                     title={statModal.title}
                     tasks={tasks.filter(t => {
-                        const todayStr = new Date().toLocaleDateString('en-CA');
+                        const __d = new Date();
+                        const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`;
                         const isTillToday = t.task_start_date && t.task_start_date.substring(0, 10) <= todayStr;
                         const isToday = t.task_start_date && t.task_start_date.substring(0, 10) === todayStr;
 

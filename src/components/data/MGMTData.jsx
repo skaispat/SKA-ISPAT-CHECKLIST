@@ -25,7 +25,8 @@ import {
 import AdminLayout from "../layout/AdminLayout"
 
 export default function MGMTData() {
-    const todayStr = new Date().toLocaleDateString('en-CA')
+    const __d = new Date();
+    const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`;
     const [tasks, setTasks] = useState([])
     const [loading, setLoading] = useState(true)
     const [isSubmittingTask, setIsSubmittingTask] = useState(false)
@@ -291,7 +292,7 @@ export default function MGMTData() {
             String(val).toLowerCase().includes(searchTerm.toLowerCase())
         )
 
-        const todayStr = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local
+        const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`; // YYYY-MM-DD local
         const taskDateStr = task.task_start_date ? task.task_start_date.substring(0, 10) : null
 
         const isCompletedOrPending = task.db_status === 'Yes' || task.db_status === 'pending_approval'

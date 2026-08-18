@@ -162,7 +162,8 @@ export default function AdminDashboard() {
     const { overviewChartData, overviewPieData } = useMemo(() => {
         let barData = [];
         const pieCounts = { Completed: 0, Pending: 0, Overdue: 0 };
-        const todayStr = new Date().toLocaleDateString('en-CA');
+        const __d = new Date();
+        const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`;
 
         if (overviewMonth === -1) {
             // Yearly View: 12 Months
@@ -565,9 +566,14 @@ export default function AdminDashboard() {
 
             // Run tasks and users fetch in parallel
             const [tasksData, usersData] = await Promise.all([
-                fetchAllData('master_tasks', (q) => q.eq('department', department)),
-                fetchAllData('users', (q) => q.eq('department', department))
+                fetchAllData('master_tasks', (q) => q.ilike('department', department)),
+                fetchAllData('users', (q) => q.ilike('department', department))
             ]);
+
+            // Deduplicate tasks by task_id to prevent duplicates matching the department data pages
+            const uniqueTasksData = Array.from(
+                new Map(tasksData.map((item: any) => [item.task_id || item.id, item])).values()
+            );
 
             let totalTasks = 0;
             let completedTasks = 0;
@@ -609,9 +615,10 @@ export default function AdminDashboard() {
                 });
             });
 
-            const todayStr = new Date().toLocaleDateString('en-CA');
+            const __d = new Date();
+            const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`;
 
-            const processedTasks = tasksData.map((row) => {
+            const processedTasks = uniqueTasksData.map((row) => {
                 const assignedTo = row.name || 'Unassigned';
                 const taskDateStr = row.task_start_date ? row.task_start_date.substring(0, 10) : null;
                 const isDueUpToToday = taskDateStr && taskDateStr <= todayStr;
@@ -636,6 +643,7 @@ export default function AdminDashboard() {
 
                 const isCompleted = row.status === 'Yes';
                 const isPendingApproval = row.status === 'pending_approval';
+                const isRejected = row.status === 'rejected';
 
                 // Determine derived status
                 let derivedStatus = 'pending';
@@ -643,7 +651,9 @@ export default function AdminDashboard() {
                     derivedStatus = 'completed';
                 } else if (isPendingApproval) {
                     derivedStatus = 'pending_approval';
-                } else if (taskDate && taskDate < today) {
+                } else if (isRejected) {
+                    derivedStatus = 'rejected';
+                } else if (taskDateStr && taskDateStr < todayStr) {
                     derivedStatus = 'overdue';
                 } else {
                     derivedStatus = 'pending';
@@ -673,6 +683,8 @@ export default function AdminDashboard() {
                                 monthlyData[monthName].completed++;
                             }
                         }
+                    } else if (isRejected) {
+                        // Rejected tasks are excluded from pending and overdue counts
                     } else {
                         // Pending or Overdue (only for tasks till today)
                         if (staffData) staffData.pendingTasks++;
@@ -797,7 +809,7 @@ export default function AdminDashboard() {
         threeDaysFromNow.setDate(today.getDate() + 3);
 
         const viewFilteredTasks = filteredTasks.filter((task) => {
-            if (!task.status || task.status === "completed") return false;
+            if (!task.status || task.status === "completed" || task.status === "pending_approval" || task.status === "rejected") return false;
             const dueDate = parseDateFromDDMMYYYY(task.dueDate);
             if (!dueDate) return false;
 
@@ -906,7 +918,8 @@ export default function AdminDashboard() {
     )
 
     const StaffTasksTable = () => {
-        const todayStr = new Date().toLocaleDateString('en-CA');
+        const __d = new Date();
+        const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`;
         const filteredStaffMembers = departmentData.staffMembers.map(staff => {
             const staffTasks = departmentData.allTasks.filter(task => task.assignedTo === staff.name);
 
@@ -1626,7 +1639,8 @@ export default function AdminDashboard() {
                     onClose={() => setStatModal({ ...statModal, isOpen: false })}
                     title={statModal.title}
                     tasks={departmentData.allTasks.filter(t => {
-                        const todayStr = new Date().toLocaleDateString('en-CA');
+                        const __d = new Date();
+                        const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`;
                         const taskDateStr = t.task_start_date ? t.task_start_date.substring(0, 10) : null;
                         const isTillToday = taskDateStr && taskDateStr <= todayStr;
                         const isToday = taskDateStr === todayStr;

@@ -11,5 +11,17 @@ export default defineConfig({
   base: "/", // Changed from "./" to "/"
   build: {
     outDir: "dist",
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          pdf: ['html2canvas', 'jspdf', 'jspdf-autotable'],
+          supabase: ['@supabase/supabase-js'],
+          ui: ['framer-motion', 'lucide-react']
+        }
+      }
+    }
   },
 })

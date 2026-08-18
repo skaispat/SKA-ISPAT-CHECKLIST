@@ -25,7 +25,8 @@ import {
 import AdminLayout from "../layout/AdminLayout"
 
 export default function StoreData() {
-    const todayStr = new Date().toLocaleDateString('en-CA')
+    const __d = new Date();
+    const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`;
     const [tasks, setTasks] = useState([])
     const [loading, setLoading] = useState(true)
     const [isSubmittingTask, setIsSubmittingTask] = useState(false)
@@ -133,7 +134,7 @@ export default function StoreData() {
             let hasMore = true
 
             // Apply ordering
-            const orderedQuery = query.order('timestamp', { ascending: false })
+            const orderedQuery = query.order('task_id', { ascending: false })
 
             while (hasMore) {
                 const { data, error } = await orderedQuery.range(page * pageSize, (page + 1) * pageSize - 1)
@@ -291,7 +292,7 @@ export default function StoreData() {
             String(val).toLowerCase().includes(searchTerm.toLowerCase())
         )
 
-        const todayStr = new Date().toLocaleDateString('en-CA') // YYYY-MM-DD local
+        const todayStr = `${__d.getFullYear()}-${String(__d.getMonth() + 1).padStart(2, '0')}-${String(__d.getDate()).padStart(2, '0')}`; // YYYY-MM-DD local
         const taskDateStr = task.task_start_date ? task.task_start_date.substring(0, 10) : null
 
         const isCompletedOrPending = task.db_status === 'Yes' || task.db_status === 'pending_approval'
@@ -335,8 +336,8 @@ export default function StoreData() {
                 matchesFilters = false
             }
         } else if (activeTab === 'rejected') {
-             // Filter by Name
-             if (pendingFilterName && !task.name?.toLowerCase().includes(pendingFilterName.toLowerCase())) {
+            // Filter by Name
+            if (pendingFilterName && !task.name?.toLowerCase().includes(pendingFilterName.toLowerCase())) {
                 matchesFilters = false
             }
         }
@@ -1091,7 +1092,7 @@ function HistoryModal({ task, onClose }) {
                     .eq('task_title', task.task_title)
                     .eq('department', task.department)
                     .neq('task_id', task.task_id) // Exclude current? Or keep it? Let's keep all.
-                    .order('timestamp', { ascending: false })
+                    .order('task_id', { ascending: false })
 
                 // Helper to apply filters if we were doing server-side, 
                 // but user asked for UI filters in the dropdown/view. 
