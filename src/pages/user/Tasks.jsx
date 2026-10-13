@@ -196,12 +196,47 @@ export default function UserTasks() {
       // Upload Image if exists
       if (file) {
         setUploading(true)
-        const fileExt = file.name.split('.').pop()
+        let fileToUpload = file
+        let fileExt = file.name.split('.').pop().toLowerCase()
+
+        // If HEIC / HEIF (Apple format), convert to JPEG for universal browser viewing
+        if (fileExt === 'heic' || fileExt === 'heif' || file.type.toLowerCase().includes('heic') || file.type.toLowerCase().includes('heif')) {
+          try {
+            const { heicTo } = await import('heic-to')
+            const convertedBlob = await heicTo({
+              blob: file,
+              type: 'image/jpeg',
+              quality: 0.9
+            })
+            fileToUpload = new File([convertedBlob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' })
+            fileExt = 'jpg'
+          } catch (convErr) {
+            console.warn("heic-to upload conversion failed, trying fallback:", convErr)
+            try {
+              const heic2anyModule = await import('heic2any')
+              const heic2any = heic2anyModule.default || heic2anyModule
+              const converted = await heic2any({
+                blob: file,
+                toType: 'image/jpeg',
+                quality: 0.88
+              })
+              const singleBlob = Array.isArray(converted) ? converted[0] : converted
+              fileToUpload = new File([singleBlob], file.name.replace(/\.(heic|heif)$/i, '.jpg'), { type: 'image/jpeg' })
+              fileExt = 'jpg'
+            } catch (fallbackErr) {
+              console.warn("Could not convert HEIC on upload, uploading original:", fallbackErr)
+            }
+          }
+        }
+
         const fileName = `${selectedTask.task_id}_${Date.now()}.${fileExt}`
 
         const { error: uploadError } = await supabase.storage
           .from('images')
-          .upload(fileName, file)
+          .upload(fileName, fileToUpload, {
+            contentType: fileToUpload.type || 'image/jpeg',
+            upsert: true
+          })
 
         if (uploadError) throw uploadError
 
