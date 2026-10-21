@@ -14,11 +14,7 @@ import {
     ChevronsLeft,
     ChevronsRight,
     Download,
-    X,
-    ExternalLink,
-    RotateCw,
-    ZoomIn,
-    ZoomOut
+    ExternalLink
 } from "lucide-react"
 
 export default function AdminApproval() {
@@ -30,9 +26,6 @@ export default function AdminApproval() {
     const [rejectModalOpen, setRejectModalOpen] = useState(false)
     const [selectedTaskToReject, setSelectedTaskToReject] = useState(null)
     const [rejectionReason, setRejectionReason] = useState("")
-
-    // Image Preview Modal State
-    const [previewImageData, setPreviewImageData] = useState(null)
 
     const [activeTab, setActiveTab] = useState("pending")
     const [filterDept, setFilterDept] = useState("all")
@@ -146,14 +139,48 @@ export default function AdminApproval() {
         })
     }
 
+    // Utility: escape strings to prevent XSS vulnerabilities in dynamic tab documents
+    const escapeHtml = (str) => {
+        if (str == null) return ""
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;")
+    }
+
+    // Utility: extract clean, safe filename from URL
+    const getSafeFilename = (rawUrl, fallbackName) => {
+        try {
+            const parsed = new URL(rawUrl)
+            const name = parsed.pathname.split("/").pop()
+            return name ? decodeURIComponent(name) : fallbackName
+        } catch {
+            return (rawUrl || "").split("/").pop()?.split("?")[0]?.split("#")[0] || fallbackName
+        }
+    }
+
     const handleDownloadImage = async (url, taskId, index) => {
         try {
             const response = await fetch(url);
-            const blob = await response.blob();
+            let blob = await response.blob();
+            const cleanUrl = url.toLowerCase().split('?')[0];
+            const isHeic = cleanUrl.endsWith('.heic') || cleanUrl.endsWith('.heif') || cleanUrl.includes('.heic') || cleanUrl.includes('.heif');
+            if (isHeic) {
+                try {
+                    const { heicTo } = await import("heic-to");
+                    const converted = await heicTo({ blob, type: "image/jpeg", quality: 0.9 });
+                    blob = converted;
+                } catch (convErr) {
+                    console.warn("HEIC conversion for download failed, downloading original:", convErr);
+                }
+            }
             const blobUrl = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = blobUrl;
-            link.download = `task_${taskId}_image_${index + 1}.jpg`;
+            const safeName = getSafeFilename(url, `task_${taskId}_image_${index + 1}.jpg`);
+            link.download = safeName.replace(/\.(heic|heif)$/i, ".jpg");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -161,6 +188,409 @@ export default function AdminApproval() {
         } catch (error) {
             console.error("Error downloading image:", error);
             window.open(url, '_blank');
+        }
+    }
+
+    const handleViewImageInNewTab = async (url, task, index) => {
+        if (!url) return;
+
+        // 1. Open new tab synchronously on click to prevent pop-up blocker
+        const newTab = window.open('', '_blank');
+        if (!newTab) {
+            window.open(url, '_blank');
+            return;
+        }
+
+        const rawTitle = task?.task_title || "Task Proof";
+        const safeTitle = escapeHtml(rawTitle);
+        const taskIdStr = task?.task_id ? `#${task.task_id}` : "";
+        const safeTaskId = escapeHtml(taskIdStr);
+        const cleanUrl = url.toLowerCase().split('?')[0];
+        const isPdf = cleanUrl.endsWith('.pdf');
+        let isHeic = cleanUrl.endsWith('.heic') || cleanUrl.endsWith('.heif') || cleanUrl.includes('.heic') || cleanUrl.includes('.heif');
+
+        // 2. Initial loading state in the new tab
+        try {
+            newTab.document.write(`
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>${safeTitle} - Proof Image ${index + 1}</title>
+                    <style>
+                        body {
+                            margin: 0;
+                            background: #0b0f19;
+                            color: #f1f5f9;
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            justify-content: center;
+                            min-height: 100vh;
+                        }
+                        .spinner {
+                            border: 3px solid rgba(255, 255, 255, 0.1);
+                            border-top: 3px solid #ef4444;
+                            border-radius: 50%;
+                            width: 38px;
+                            height: 38px;
+                            animation: spin 0.8s linear infinite;
+                            margin-bottom: 16px;
+                        }
+                        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+                        .msg { font-size: 14px; color: #94a3b8; font-weight: 500; }
+                    </style>
+                </head>
+                <body>
+                    <div class="spinner"></div>
+                    <div class="msg" id="status-msg">${isHeic ? "Converting iPhone HEIC image for preview..." : "Loading image..."}</div>
+                </body>
+                </html>
+            `);
+            newTab.document.close();
+        } catch (e) {
+            console.warn("Could not write initial tab state:", e);
+        }
+
+        let blobUrlToRevoke = null;
+
+        try {
+            // 3. Fetch as blob to strip server Content-Disposition: attachment header
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP error ${response.status}: Failed to fetch image`);
+
+            let blob = await response.blob();
+
+            // If user closed tab while fetching, abort cleanly
+            if (newTab.closed) return;
+
+            // PDF handling: open in browser PDF engine
+            if (blob.type === 'application/pdf' || isPdf) {
+                const pdfBlobUrl = URL.createObjectURL(blob);
+                blobUrlToRevoke = pdfBlobUrl;
+                newTab.location.href = pdfBlobUrl;
+                return;
+            }
+
+            // 4. Inspect binary magic bytes if not detected by extension
+            if (!isHeic) {
+                const mime = (blob.type || "").toLowerCase();
+                if (mime.includes('heic') || mime.includes('heif')) {
+                    isHeic = true;
+                } else if (blob.size >= 16) {
+                    try {
+                        const head = await blob.slice(0, 64).arrayBuffer();
+                        const headStr = new TextDecoder("ascii").decode(head);
+                        if (headStr.includes("ftyp")) {
+                            const brands = ["heic", "heix", "hevc", "hevx", "mif1", "msf1", "heif", "heim", "heis"];
+                            if (brands.some(b => headStr.includes(b))) {
+                                isHeic = true;
+                            }
+                        }
+                    } catch { }
+                }
+            }
+
+            // 5. HEIC Conversion (heic-to with heic2any fallback)
+            if (isHeic) {
+                if (!newTab.closed) {
+                    const msgEl = newTab.document.getElementById('status-msg');
+                    if (msgEl) msgEl.textContent = "Converting iPhone HEIC image for preview...";
+                }
+
+                let convertedBlob = null;
+                try {
+                    const { heicTo } = await import("heic-to");
+                    convertedBlob = await heicTo({
+                        blob: blob,
+                        type: "image/jpeg",
+                        quality: 0.9
+                    });
+                } catch (err1) {
+                    try {
+                        const heic2anyModule = await import("heic2any");
+                        const heic2any = heic2anyModule.default || heic2anyModule;
+                        const typedBlob = (blob.type && (blob.type.includes("heic") || blob.type.includes("heif")))
+                            ? blob
+                            : new Blob([blob], { type: "image/heic" });
+                        const res = await heic2any({
+                            blob: typedBlob,
+                            toType: "image/jpeg",
+                            quality: 0.88
+                        });
+                        convertedBlob = Array.isArray(res) ? res[0] : res;
+                    } catch (err2) {
+                        console.error("HEIC conversion error:", err2);
+                    }
+                }
+
+                if (convertedBlob) {
+                    blob = convertedBlob;
+                }
+            }
+
+            if (newTab.closed) return;
+
+            const blobUrl = URL.createObjectURL(blob);
+            blobUrlToRevoke = blobUrl;
+
+            // Clean, safe filename for download
+            const rawFilename = getSafeFilename(url, `task_${task?.task_id || 'proof'}_image_${index + 1}.jpg`);
+            const downloadFilename = escapeHtml(rawFilename.replace(/\.(heic|heif)$/i, ".jpg"));
+
+            // Memory cleanup: revoke blob URL when tab is closed
+            try {
+                newTab.addEventListener('pagehide', () => {
+                    try { URL.revokeObjectURL(blobUrl); } catch { }
+                }, { once: true });
+            } catch { }
+
+            // 6. Render complete modern image viewer in the new tab
+            newTab.document.open();
+            newTab.document.write(`
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <title>${safeTitle} ${safeTaskId ? '(' + safeTaskId + ')' : ''} - Image ${index + 1}</title>
+                    <style>
+                        * { box-sizing: border-box; }
+                        body {
+                            margin: 0;
+                            padding: 0;
+                            background: #0b0f19;
+                            color: #f1f5f9;
+                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                            height: 100vh;
+                            display: flex;
+                            flex-direction: column;
+                            overflow: hidden;
+                            user-select: none;
+                        }
+                        header {
+                            height: 54px;
+                            background: rgba(15, 23, 42, 0.9);
+                            backdrop-filter: blur(8px);
+                            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                            display: flex;
+                            align-items: center;
+                            justify-content: space-between;
+                            padding: 0 18px;
+                            z-index: 10;
+                            flex-shrink: 0;
+                        }
+                        .title-wrap {
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            overflow: hidden;
+                        }
+                        .task-title {
+                            font-size: 14px;
+                            font-weight: 600;
+                            color: #f8fafc;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                            max-width: 50vw;
+                        }
+                        .task-badge {
+                            background: rgba(153, 27, 27, 0.2);
+                            color: #f87171;
+                            border: 1px solid rgba(153, 27, 27, 0.4);
+                            font-size: 11px;
+                            font-weight: 600;
+                            padding: 2px 8px;
+                            border-radius: 9999px;
+                        }
+                        .actions {
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                        }
+                        .btn {
+                            background: rgba(255, 255, 255, 0.08);
+                            border: 1px solid rgba(255, 255, 255, 0.12);
+                            color: #e2e8f0;
+                            font-size: 12px;
+                            font-weight: 500;
+                            padding: 6px 12px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 6px;
+                            text-decoration: none;
+                            transition: all 0.15s ease;
+                        }
+                        .btn:hover {
+                            background: rgba(255, 255, 255, 0.15);
+                            color: #ffffff;
+                        }
+                        .btn-download {
+                            background: #991b1b;
+                            border-color: #7f1d1d;
+                            color: #ffffff;
+                        }
+                        .btn-download:hover {
+                            background: #b91c1c;
+                        }
+                        .canvas-wrap {
+                            flex: 1;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            overflow: auto;
+                            padding: 16px;
+                            position: relative;
+                            touch-action: pan-x pan-y pinch-zoom;
+                        }
+                        img {
+                            max-width: 95vw;
+                            max-height: calc(100vh - 86px);
+                            object-fit: contain;
+                            border-radius: 8px;
+                            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+                            transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                            cursor: zoom-in;
+                        }
+                        img.zoomed {
+                            max-width: none;
+                            max-height: none;
+                            cursor: zoom-out;
+                            transform-origin: center center;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <header>
+                        <div class="title-wrap" title="${safeTitle}">
+                            <span class="task-title">${safeTitle}</span>
+                            ${safeTaskId ? `<span class="task-badge">${safeTaskId}</span>` : ''}
+                            <span style="font-size: 12px; color: #94a3b8;">Image ${index + 1}</span>
+                        </div>
+                        <div class="actions">
+                            <button class="btn" id="rotate-btn" title="Rotate 90° (R)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                                Rotate
+                            </button>
+                            <button class="btn" id="zoom-btn" title="Toggle Zoom (Z)">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                                Zoom
+                            </button>
+                            <a class="btn btn-download" href="${blobUrl}" download="${downloadFilename}">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                Download
+                            </a>
+                        </div>
+                    </header>
+                    <div class="canvas-wrap" id="stage">
+                        <img id="view-img" src="${blobUrl}" alt="${safeTitle}" />
+                    </div>
+                    <script>
+                        let rotation = 0;
+                        let zoomed = false;
+                        const img = document.getElementById('view-img');
+                        const rotateBtn = document.getElementById('rotate-btn');
+                        const zoomBtn = document.getElementById('zoom-btn');
+
+                        function updateTransform() {
+                            img.style.transform = 'rotate(' + rotation + 'deg) ' + (zoomed ? 'scale(1.8)' : 'scale(1)');
+                        }
+
+                        rotateBtn.addEventListener('click', () => {
+                            rotation = (rotation + 90) % 360;
+                            updateTransform();
+                        });
+
+                        zoomBtn.addEventListener('click', () => {
+                            zoomed = !zoomed;
+                            img.classList.toggle('zoomed', zoomed);
+                            updateTransform();
+                        });
+
+                        img.addEventListener('click', () => {
+                            zoomed = !zoomed;
+                            img.classList.toggle('zoomed', zoomed);
+                            updateTransform();
+                        });
+
+                        window.addEventListener('keydown', (e) => {
+                            if (e.key === 'r' || e.key === 'R') {
+                                rotation = (rotation + 90) % 360;
+                                updateTransform();
+                            } else if (e.key === 'z' || e.key === 'Z') {
+                                zoomed = !zoomed;
+                                img.classList.toggle('zoomed', zoomed);
+                                updateTransform();
+                            } else if (e.key === 'Escape') {
+                                window.close();
+                            }
+                        });
+                    <\/script>
+                </body>
+                </html>
+            `);
+            newTab.document.close();
+        } catch (fetchErr) {
+            console.error("Error opening image in new tab:", fetchErr);
+            if (blobUrlToRevoke) {
+                try { URL.revokeObjectURL(blobUrlToRevoke); } catch { }
+            }
+            if (newTab && !newTab.closed) {
+                try {
+                    newTab.document.open();
+                    newTab.document.write(`
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <title>Preview Error</title>
+                            <style>
+                                body {
+                                    margin: 0;
+                                    background: #0b0f19;
+                                    color: #f1f5f9;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                    display: flex;
+                                    flex-direction: column;
+                                    align-items: center;
+                                    justify-content: center;
+                                    min-height: 100vh;
+                                    text-align: center;
+                                    padding: 24px;
+                                }
+                                h2 { font-size: 18px; margin: 0 0 8px 0; color: #f87171; }
+                                p { font-size: 13px; color: #94a3b8; margin: 0 0 20px 0; max-width: 380px; }
+                                .btn {
+                                    background: #991b1b;
+                                    color: white;
+                                    border: none;
+                                    padding: 10px 20px;
+                                    border-radius: 8px;
+                                    font-size: 13px;
+                                    font-weight: 500;
+                                    text-decoration: none;
+                                    cursor: pointer;
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <h2>Could not stream image inline</h2>
+                            <p>Directly access the server file or check your connection.</p>
+                            <a class="btn" href="${escapeHtml(url)}" target="_self">Open Direct File URL</a>
+                        </body>
+                        </html>
+                    `);
+                    newTab.document.close();
+                } catch {
+                    newTab.location.href = url;
+                }
+            }
         }
     }
 
@@ -332,21 +762,19 @@ export default function AdminApproval() {
                                                     <div className="flex flex-col gap-1.5">
                                                         {task.uploaded_image.split(',').filter(Boolean).map((url, index) => (
                                                             <div key={index} className="flex items-center gap-2">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setPreviewImageData({
-                                                                        images: task.uploaded_image.split(',').filter(Boolean),
-                                                                        currentIndex: index,
-                                                                        taskTitle: task.task_title,
-                                                                        taskDescription: task.task_description,
-                                                                        userName: task.name,
-                                                                        taskId: task.task_id
-                                                                    })}
+                                                                <a
+                                                                    href={url}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        handleViewImageInNewTab(url, task, index);
+                                                                    }}
                                                                     className="inline-flex items-center gap-1.5 text-[#991B1B] hover:text-[#7f1d1d] font-medium text-xs hover:underline cursor-pointer"
                                                                 >
                                                                     <Eye className="w-3.5 h-3.5" />
                                                                     View Image {index + 1}
-                                                                </button>
+                                                                </a>
                                                                 <button
                                                                     onClick={() => handleDownloadImage(url, task.task_id, index)}
                                                                     className="p-1 text-gray-500 hover:text-[#991B1B] hover:bg-red-50 rounded transition-colors"
@@ -450,20 +878,18 @@ export default function AdminApproval() {
                                         <div className="flex flex-col gap-2">
                                             {task.uploaded_image.split(',').filter(Boolean).map((url, index) => (
                                                 <div key={index} className="flex items-center gap-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setPreviewImageData({
-                                                            images: task.uploaded_image.split(',').filter(Boolean),
-                                                            currentIndex: index,
-                                                            taskTitle: task.task_title,
-                                                            taskDescription: task.task_description,
-                                                            userName: task.name,
-                                                            taskId: task.task_id
-                                                        })}
+                                                    <a
+                                                        href={url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            handleViewImageInNewTab(url, task, index);
+                                                        }}
                                                         className="inline-flex items-center gap-1.5 text-[#991B1B] font-medium text-xs hover:underline cursor-pointer"
                                                     >
                                                         <Eye className="w-3.5 h-3.5" /> View Proof {index + 1}
-                                                    </button>
+                                                    </a>
                                                     <button
                                                         onClick={() => handleDownloadImage(url, task.task_id, index)}
                                                         className="p-1 text-gray-500 hover:text-[#991B1B] hover:bg-red-50 rounded transition-colors"
@@ -592,471 +1018,7 @@ export default function AdminApproval() {
                     </div>
                 )}
 
-                {/* Image Preview Modal */}
-                {previewImageData && (
-                    <ImagePreviewModal
-                        data={previewImageData}
-                        onClose={() => setPreviewImageData(null)}
-                    />
-                )}
-
             </div>
         </AdminLayout>
-    )
-}
-
-// Image Preview Modal Component
-function ImagePreviewModal({ data, onClose }) {
-    const { images = [], taskTitle = "", taskDescription = "", userName = "", taskId = "" } = data || {}
-    const [currentIndex, setCurrentIndex] = useState(data?.currentIndex || 0)
-    const [isZoomed, setIsZoomed] = useState(false)
-    const [rotation, setRotation] = useState(0)
-    const [imageLoading, setImageLoading] = useState(true)
-    const [isConvertingHeic, setIsConvertingHeic] = useState(false)
-    const [displayUrl, setDisplayUrl] = useState("")
-    const [isPdf, setIsPdf] = useState(false)
-    const [hasError, setHasError] = useState(false)
-    const [convertedCache, setConvertedCache] = useState({})
-
-    const currentUrl = images[currentIndex] || ""
-
-    // Convert URL to local Blob URL to bypass server "Content-Disposition: attachment" headers
-    useEffect(() => {
-        let active = true
-        let blobUrlToRevoke = null
-
-        const prepareMedia = async () => {
-            setImageLoading(true)
-            setHasError(false)
-            setIsZoomed(false)
-            setRotation(0)
-            setIsConvertingHeic(false)
-
-            if (!currentUrl) {
-                setImageLoading(false)
-                return
-            }
-
-            // Check if already converted in session cache
-            if (convertedCache[currentUrl]) {
-                setDisplayUrl(convertedCache[currentUrl])
-                setImageLoading(false)
-                return
-            }
-
-            const cleanUrl = currentUrl.toLowerCase().split('?')[0]
-            const isPdfExt = cleanUrl.endsWith('.pdf')
-            let isHeic = cleanUrl.endsWith('.heic') || cleanUrl.endsWith('.heif') || cleanUrl.includes('.heic') || cleanUrl.includes('.heif')
-
-            try {
-                // Fetch the image data directly as a Blob
-                // This strips any Content-Disposition: attachment header sent by Supabase
-                const response = await fetch(currentUrl)
-                if (!response.ok) throw new Error("Failed to fetch image stream")
-
-                let blob = await response.blob()
-                if (!active) return
-
-                if (blob.type === 'application/pdf' || isPdfExt) {
-                    setIsPdf(true)
-                } else {
-                    setIsPdf(false)
-                }
-
-                // Detect HEIC from MIME or ISOBMFF header inspection if not already detected by URL
-                if (!isHeic) {
-                    const mime = (blob.type || "").toLowerCase()
-                    if (mime.includes('heic') || mime.includes('heif')) {
-                        isHeic = true
-                    } else if (blob.size >= 16) {
-                        try {
-                            const head = await blob.slice(0, 64).arrayBuffer()
-                            const headStr = new TextDecoder("ascii").decode(head)
-                            if (headStr.includes("ftyp")) {
-                                const brands = ["heic", "heix", "hevc", "hevx", "mif1", "msf1", "heif", "heim", "heis"]
-                                if (brands.some(b => headStr.includes(b))) {
-                                    isHeic = true
-                                }
-                            }
-                        } catch {
-                            // ignore detection error
-                        }
-                    }
-                }
-
-                // If HEIC / HEIF, convert to JPEG for native browser rendering
-                if (isHeic) {
-                    setIsConvertingHeic(true)
-                    let convertedBlob = null
-                    try {
-                        const { heicTo } = await import("heic-to")
-                        convertedBlob = await heicTo({
-                            blob: blob,
-                            type: "image/jpeg",
-                            quality: 0.9
-                        })
-                    } catch (heicToErr) {
-                        console.warn("heic-to conversion failed, trying fallback:", heicToErr)
-                        try {
-                            const heic2anyModule = await import("heic2any")
-                            const heic2any = heic2anyModule.default || heic2anyModule
-                            const typedBlob = (blob.type && (blob.type.includes("heic") || blob.type.includes("heif")))
-                                ? blob
-                                : new Blob([blob], { type: "image/heic" })
-                            const converted = await heic2any({
-                                blob: typedBlob,
-                                toType: "image/jpeg",
-                                quality: 0.88
-                            })
-                            convertedBlob = Array.isArray(converted) ? converted[0] : converted
-                        } catch (fallbackErr) {
-                            console.error("All HEIC converters failed:", fallbackErr)
-                        }
-                    }
-
-                    if (convertedBlob) {
-                        blob = convertedBlob
-                    } else {
-                        // If conversion could not decode the image, display the unsupported fallback card
-                        if (!active) return
-                        setIsConvertingHeic(false)
-                        setImageLoading(false)
-                        setHasError(true)
-                        return
-                    }
-                }
-
-                const localUrl = window.URL.createObjectURL(blob)
-                blobUrlToRevoke = localUrl
-                setDisplayUrl(localUrl)
-                setConvertedCache(prev => ({ ...prev, [currentUrl]: localUrl }))
-                setIsConvertingHeic(false)
-                setImageLoading(false)
-            } catch (err) {
-                console.error("Error preparing image preview:", err)
-                if (!active) return
-                setIsConvertingHeic(false)
-                if (isHeic) {
-                    setImageLoading(false)
-                    setHasError(true)
-                } else {
-                    // Fall back to raw URL
-                    setDisplayUrl(currentUrl)
-                    setImageLoading(false)
-                }
-            }
-        }
-
-        prepareMedia()
-
-        return () => {
-            active = false
-            if (blobUrlToRevoke) {
-                window.URL.revokeObjectURL(blobUrlToRevoke)
-            }
-        }
-    }, [currentUrl])
-
-    // Keyboard navigation (Esc, Left, Right)
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.key === "Escape") {
-                onClose()
-            } else if (e.key === "ArrowLeft" && images.length > 1) {
-                setCurrentIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))
-            } else if (e.key === "ArrowRight" && images.length > 1) {
-                setCurrentIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
-            }
-        }
-        window.addEventListener("keydown", handleKeyDown)
-        return () => window.removeEventListener("keydown", handleKeyDown)
-    }, [images.length, onClose])
-
-    const handleDownload = async () => {
-        if (!currentUrl) return
-        try {
-            // If displayUrl is a converted Blob URL (e.g. from HEIC), download the JPEG directly
-            if (displayUrl && displayUrl.startsWith("blob:")) {
-                const link = document.createElement("a")
-                link.href = displayUrl
-                let filename = currentUrl.split("/").pop()?.split("?")[0] || `task_${taskId}_image_${currentIndex + 1}.jpg`
-                filename = filename.replace(/\.(heic|heif)$/i, ".jpg")
-                if (!filename.toLowerCase().endsWith(".jpg") && !filename.toLowerCase().endsWith(".jpeg") && !filename.toLowerCase().endsWith(".png") && !filename.toLowerCase().endsWith(".pdf")) {
-                    filename += ".jpg"
-                }
-                link.download = filename
-                document.body.appendChild(link)
-                link.click()
-                document.body.removeChild(link)
-                return
-            }
-
-            const response = await fetch(currentUrl)
-            const blob = await response.blob()
-            const blobUrl = window.URL.createObjectURL(blob)
-            const link = document.createElement("a")
-            link.href = blobUrl
-            const filename = currentUrl.split("/").pop()?.split("?")[0] || `task_${taskId}_image_${currentIndex + 1}.jpg`
-            link.download = filename
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            window.URL.revokeObjectURL(blobUrl)
-        } catch {
-            window.open(currentUrl, "_blank")
-        }
-    }
-
-    const handleOpenInNewTab = () => {
-        const targetUrl = displayUrl || currentUrl
-        const newWin = window.open('', '_blank')
-        if (newWin) {
-            if (isPdf) {
-                newWin.location.href = targetUrl
-            } else {
-                newWin.document.write(`
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>${taskTitle || 'Task Proof'}</title>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <style>
-                            body { margin:0; background:#0b0f19; display:flex; align-items:center; justify-content:center; min-height:100vh; font-family:sans-serif; }
-                            img { max-width:98vw; max-height:98vh; object-fit:contain; border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
-                        </style>
-                    </head>
-                    <body>
-                        <img src="${targetUrl}" alt="${taskTitle || 'Task proof'}" />
-                    </body>
-                    </html>
-                `)
-                newWin.document.close()
-            }
-        } else {
-            window.open(targetUrl, '_blank')
-        }
-    }
-
-    if (!currentUrl) return null
-
-    return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6 animate-in fade-in duration-200"
-            onClick={onClose}
-        >
-            <div
-                className="relative bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
-                onClick={(e) => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 bg-gray-50/80">
-                    <div className="min-w-0 pr-4">
-                        <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-semibold text-gray-900 truncate max-w-md">
-                                {taskTitle || "Task Proof Image"}
-                            </span>
-                            {taskId && (
-                                <span className="font-mono text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 shrink-0">
-                                    #{taskId}
-                                </span>
-                            )}
-                            {userName && (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium shrink-0">
-                                    {userName}
-                                </span>
-                            )}
-                        </div>
-                        {images.length > 1 && (
-                            <p className="text-xs text-gray-500 mt-0.5">
-                                Showing image {currentIndex + 1} of {images.length}
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                        {!isPdf && !hasError && (
-                            <>
-                                {/* Zoom toggle button */}
-                                <button
-                                    type="button"
-                                    onClick={() => setIsZoomed(!isZoomed)}
-                                    className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-200/60 rounded-lg transition-colors cursor-pointer"
-                                    title={isZoomed ? "Zoom Out" : "Zoom In"}
-                                >
-                                    {isZoomed ? <ZoomOut className="h-4 w-4" /> : <ZoomIn className="h-4 w-4" />}
-                                </button>
-
-                                {/* Rotate button */}
-                                <button
-                                    type="button"
-                                    onClick={() => setRotation((prev) => (prev + 90) % 360)}
-                                    className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-200/60 rounded-lg transition-colors cursor-pointer"
-                                    title="Rotate 90°"
-                                >
-                                    <RotateCw className="h-4 w-4" />
-                                </button>
-                            </>
-                        )}
-
-                        {/* Download button */}
-                        <button
-                            type="button"
-                            onClick={handleDownload}
-                            className="p-2 text-gray-500 hover:text-[#991B1B] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                            title="Download Image"
-                        >
-                            <Download className="h-4 w-4" />
-                        </button>
-
-                        {/* Open in new tab (bypasses direct download) */}
-                        <button
-                            type="button"
-                            onClick={handleOpenInNewTab}
-                            className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-200/60 rounded-lg transition-colors cursor-pointer"
-                            title="Open view in new tab"
-                        >
-                            <ExternalLink className="h-4 w-4" />
-                        </button>
-
-                        <div className="h-4 w-px bg-gray-200 mx-1" />
-
-                        {/* Close button */}
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-200/60 rounded-lg transition-colors cursor-pointer"
-                            title="Close (Esc)"
-                        >
-                            <X className="h-5 w-5" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Display Area */}
-                <div className="relative flex-1 bg-gray-900/5 overflow-auto flex items-center justify-center p-4 min-h-[320px] max-h-[70vh]">
-                    {imageLoading && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/70 z-10 backdrop-blur-[2px]">
-                            <Loader2 className="h-8 w-8 animate-spin text-[#991B1B]" />
-                            <span className="text-xs text-gray-600 font-medium">
-                                {isConvertingHeic || currentUrl?.toLowerCase().includes('.heic') || currentUrl?.toLowerCase().includes('.heif')
-                                    ? "Converting iPhone / HEIC image for preview..."
-                                    : "Loading image..."}
-                            </span>
-                        </div>
-                    )}
-
-                    {hasError ? (
-                        <div className="flex flex-col items-center justify-center gap-3 p-8 text-center max-w-sm">
-                            <div className="w-12 h-12 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
-                                <AlertCircle className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <p className="text-sm font-semibold text-gray-900">Preview not supported inline</p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                    The image format or server settings require direct download to view.
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={handleDownload}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-[#991B1B] text-white text-xs font-semibold rounded-lg hover:bg-[#7f1d1d] shadow-sm transition-all cursor-pointer"
-                            >
-                                <Download className="w-3.5 h-3.5" />
-                                Download File to View
-                            </button>
-                        </div>
-                    ) : isPdf ? (
-                        <iframe
-                            src={displayUrl || currentUrl}
-                            title="PDF Document"
-                            className="w-full h-[66vh] rounded-lg border border-gray-200 bg-white"
-                        />
-                    ) : (
-                        <div className="relative flex items-center justify-center w-full h-full overflow-hidden">
-                            <img
-                                src={displayUrl || currentUrl}
-                                alt={taskTitle || "Task proof"}
-                                onLoad={() => setImageLoading(false)}
-                                onError={() => {
-                                    setImageLoading(false)
-                                    setHasError(true)
-                                }}
-                                onClick={() => setIsZoomed(!isZoomed)}
-                                className={`max-h-[66vh] max-w-full object-contain rounded-lg shadow-sm transition-all duration-200 select-none ${isZoomed ? "scale-150 cursor-zoom-out" : "cursor-zoom-in hover:opacity-95"
-                                    }`}
-                                style={{
-                                    transform: `rotate(${rotation}deg) ${isZoomed ? "scale(1.5)" : "scale(1)"}`,
-                                }}
-                            />
-                        </div>
-                    )}
-
-                    {/* Previous Button */}
-                    {images.length > 1 && (
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                setCurrentIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))
-                            }}
-                            className="absolute left-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-white/90 hover:bg-white text-gray-800 shadow-md backdrop-blur-sm transition-all hover:scale-105 cursor-pointer z-10 border border-gray-200"
-                            title="Previous Image (←)"
-                        >
-                            <ChevronLeft className="h-5 w-5" />
-                        </button>
-                    )}
-
-                    {/* Next Button */}
-                    {images.length > 1 && (
-                        <button
-                            type="button"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                setCurrentIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
-                            }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-white/90 hover:bg-white text-gray-800 shadow-md backdrop-blur-sm transition-all hover:scale-105 cursor-pointer z-10 border border-gray-200"
-                            title="Next Image (→)"
-                        >
-                            <ChevronRight className="h-5 w-5" />
-                        </button>
-                    )}
-                </div>
-
-                {/* Footer with Thumbnails (if multiple images) */}
-                {images.length > 1 && (
-                    <div className="p-3 border-t border-gray-100 bg-gray-50 flex items-center justify-center gap-2 overflow-x-auto">
-                        {images.map((url, idx) => (
-                            <button
-                                key={idx}
-                                type="button"
-                                onClick={() => setCurrentIndex(idx)}
-                                className={`relative w-14 h-14 rounded-lg overflow-hidden border-2 transition-all shrink-0 cursor-pointer ${currentIndex === idx
-                                        ? "border-[#991B1B] ring-2 ring-[#991B1B]/20 scale-105"
-                                        : "border-transparent opacity-60 hover:opacity-100"
-                                    }`}
-                            >
-                                <img
-                                    src={convertedCache[url] || (currentIndex === idx && displayUrl ? displayUrl : url)}
-                                    alt={`Thumbnail ${idx + 1}`}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                        e.currentTarget.style.display = 'none';
-                                        if (e.currentTarget.nextSibling) {
-                                            e.currentTarget.nextSibling.style.display = 'flex';
-                                        }
-                                    }}
-                                />
-                                <span
-                                    style={{ display: 'none' }}
-                                    className="w-full h-full items-center justify-center bg-gray-200 text-[11px] font-bold text-gray-600"
-                                >
-                                    #{idx + 1}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
-        </div>
     )
 }
