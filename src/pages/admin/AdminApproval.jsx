@@ -128,15 +128,41 @@ export default function AdminApproval() {
         }
     }
 
+    // Format any DB date/timestamp in IST (Asia/Kolkata), regardless of the viewer's browser timezone
     const formatDate = (dateString) => {
         if (!dateString) return "N/A"
-        return new Date(dateString).toLocaleDateString("en-GB", {
+        const raw = String(dateString).trim()
+
+        // Pure date (e.g. "2026-11-21") — no time component, show date only
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+            const [y, m, d] = raw.split("-").map(Number)
+            return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-GB", {
+                timeZone: "UTC",
+                day: "2-digit",
+                month: "short",
+                year: "numeric"
+            })
+        }
+
+        // Timestamps without an explicit offset are stored as UTC — mark them as such
+        const hasTz = /([zZ]|[+-]\d{2}(:?\d{2})?)$/.test(raw)
+        const parsed = new Date(hasTz ? raw : raw.replace(" ", "T") + "Z")
+        if (isNaN(parsed.getTime())) return raw
+
+        return parsed.toLocaleString("en-GB", {
+            timeZone: "Asia/Kolkata",
             day: "2-digit",
             month: "short",
             year: "numeric",
             hour: "2-digit",
-            minute: "2-digit"
+            minute: "2-digit",
+            hour12: true
         })
+    }
+
+    const formatDoers = (doers) => {
+        if (Array.isArray(doers)) return doers.filter(Boolean).join(", ")
+        return doers || ""
     }
 
     // Utility: escape strings to prevent XSS vulnerabilities in dynamic tab documents
@@ -709,6 +735,7 @@ export default function AdminApproval() {
                                     <tr>
                                         <th className="px-6 py-4">Task Details</th>
                                         <th className="px-6 py-4">User</th>
+                                        {activeTab === 'pending' && <th className="px-6 py-4">Doer Name</th>}
                                         <th className="px-6 py-4">Department</th>
                                         <th className="px-6 py-4">Area</th>
                                         <th className="px-6 py-4">Start Date</th>
@@ -739,6 +766,11 @@ export default function AdminApproval() {
                                                     {task.name}
                                                 </span>
                                             </td>
+                                            {activeTab === 'pending' && (
+                                                <td className="px-6 py-4 align-top whitespace-nowrap text-gray-700">
+                                                    {formatDoers(task.doers_name) || <span className="text-gray-400 text-xs italic">-</span>}
+                                                </td>
+                                            )}
                                             <td className="px-6 py-4 align-top whitespace-nowrap text-gray-600">
                                                 {task.department}
                                             </td>
@@ -861,10 +893,15 @@ export default function AdminApproval() {
                                         </div>
                                     )}
 
-                                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
                                         <div className="flex items-center gap-1">
                                             <span className="font-medium">User:</span> {task.name}
                                         </div>
+                                        {activeTab === 'pending' && formatDoers(task.doers_name) && (
+                                            <div className="flex items-center gap-1">
+                                                <span className="font-medium">Doer:</span> {formatDoers(task.doers_name)}
+                                            </div>
+                                        )}
                                         <div className="flex items-center gap-1">
                                             <span className="font-medium">Area:</span> {task.location}
                                         </div>
